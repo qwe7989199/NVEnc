@@ -365,7 +365,7 @@ Specify the output codec
  - av1
  - raw
 
-   ```-c raw``` will not encode and output raw frames. The format of raw frames will be y4m by default. This can be changed to raw fromat by adding ```-f raw```.
+   ```-c raw``` will not encode and output raw frames. The format of raw frames will be y4m by default. This can be changed to raw format by adding ```-f raw```.
 
 ### -o, --output &lt;string&gt;
 Set output file name, pipe output with "-".
@@ -663,7 +663,7 @@ Set the reference distance (max=16).
 
 ### --multiref-l0 &lt;int&gt; [H.264/HEVC]  
 ### --multiref-l1 &lt;int&gt; [H.264/HEVC]  
-Set max number of reference frames in reference picture list L0/L1 (max=7). Avaialble from API v9.1.
+Set max number of reference frames in reference picture list L0/L1 (max=7). Available from API v9.1.
 
 ### --weightp
 Enable weighted P frames.
@@ -1094,7 +1094,7 @@ Example 2: --audio-bitrate 2?256 (set bitrate of 2nd audio track to to 256 kbps)
 ```
 
 ### --audio-profile [&lt;int/string&gt;?]&lt;string&gt;
-Specify audio codec profile when encoding audio.You can select audio track (1, 2, ...) to encode with [&lt;int&gt;], or select audio track to encode by language with [&lt;string&gt;].
+Specify audio codec profile when encoding audio. You can select audio track (1, 2, ...) to encode with [&lt;int&gt;], or select audio track to encode by language with [&lt;string&gt;].
 
 ### --audio-stream [&lt;int/string&gt;?]{&lt;string1&gt;}[:&lt;string2&gt;]
 Separate or merge audio channels.
