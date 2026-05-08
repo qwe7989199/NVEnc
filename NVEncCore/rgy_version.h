@@ -80,12 +80,12 @@ const char *get_encoder_version();
 #define AV_CHANNEL_LAYOUT_STRUCT_AVAIL 1
 #define AV_FRAME_DURATION_AVAIL 1
 #define AVCODEC_PAR_CODED_SIDE_DATA_AVAIL 1
-#define ENABLE_LIBASS_SUBBURN 1
+#define ENABLE_LIBASS_SUBBURN 0
 #define ENABLE_D3D11 1
 #define ENABLE_D3D11_DEVINFO_WMI 1
-#define ENABLE_LIBPLACEBO 1
-#define ENABLE_LIBDOVI 1
-#define ENABLE_LIBHDR10PLUS 1
+#define ENABLE_LIBPLACEBO 0
+#define ENABLE_LIBDOVI 0
+#define ENABLE_LIBHDR10PLUS 0
 #define ENABLE_VULKAN 0
 #define AVS_INTERF_VER 11
 
@@ -104,11 +104,11 @@ const char *get_encoder_version();
 #else
 #define ENABLE_NVML 1
 #define ENABLE_NVRTC 1
-#define ENABLE_VMAF 1
-#define ENABLE_LIBVSHIP 1
-#define ENABLE_NVVFX 1
-#define ENABLE_NVOFFRUC 1
-#define ENABLE_NVSDKNGX 1
+#define ENABLE_VMAF 0
+#define ENABLE_LIBVSHIP 0
+#define ENABLE_NVVFX 0
+#define ENABLE_NVOFFRUC 0
+#define ENABLE_NVSDKNGX 0
 #endif
 
 #define ENABLE_VPP_SMOOTH_QP_FRAME 0
@@ -133,8 +133,8 @@ const char *get_encoder_version();
 #define FOR_AUO                   0
 #define ENABLE_RAW_READER         1
 #define ENABLE_AVI_READER         1
-#define ENABLE_AVISYNTH_READER    1
-#define ENABLE_VAPOURSYNTH_READER 1
+#define ENABLE_AVISYNTH_READER    0
+#define ENABLE_VAPOURSYNTH_READER 0
 #define ENABLE_AVSW_READER        1
 #define ENABLE_SM_READER          1
 #define ENABLE_LIBAVDEVICE        1

@@ -4825,6 +4825,11 @@ RGY_ERR NVEncCore::initPipeline(const InEncodeVideoParam *prm) {
         m_pipelineTasks.push_back(std::make_unique<PipelineTaskNVDecode>(m_dev.get(), m_pDecoder.get(), 0, m_pFileReader.get(), parallelEncEndPts, prm->ctrl.threadParams.get(RGYThreadType::DEC), m_pLog));
         taskNVDec = dynamic_cast<PipelineTaskNVDecode *>(m_pipelineTasks.back().get());
     } else {
+#if ENABLE_AVSW_READER && ENCODER_NVENC
+        if (auto cuprReader = dynamic_cast<RGYInputCupr *>(m_pFileReader.get()); cuprReader != nullptr) {
+            m_pipelineTasks.push_back(std::make_unique<PipelineTaskCuprInput>(m_dev.get(), 1, cuprReader, parallelEncEndPts, prm->ctrl.threadParams.get(RGYThreadType::INPUT), m_pLog));
+        } else
+#endif
         m_pipelineTasks.push_back(std::make_unique<PipelineTaskInput>(m_dev.get(), 1, m_pFileReader.get(), parallelEncEndPts, prm->ctrl.threadParams.get(RGYThreadType::INPUT), m_pLog));
     }
     if (m_pFileWriterListAudio.size() > 0 || hasFilterForStreams(m_vpFilters)) {

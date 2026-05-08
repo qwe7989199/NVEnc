@@ -42,6 +42,8 @@
   - [--vpy](#--vpy)
   - [--avsw \[\<string\>\]](#--avsw-string)
   - [--avhw](#--avhw)
+  - [--cupr](#--cupr)
+  - [--cupr-strategy \<string\>](#--cupr-strategy-string)
   - [--interlace \<string\>](#--interlace-string)
   - [--crop \<int\>,\<int\>,\<int\>,\<int\>](#--crop-intintintint)
   - [--frames \<int\>](#--frames-int)
@@ -467,6 +469,7 @@ NVEncの入力方法は下の表のとおり。入力フォーマットをして
 |               vpy    |   ◎   |      |   ◎   |   ◎   |       |       |
 |               avhw   |   □   |      |        |   ◇   |       |       |
 |               avsw   |   ◎   |      |   ◎   |   ◎   |   ○  |   ○  |
+|               cupr   |       |      |   □   |        |       |       |
 
 ◎ ... 8bit / 9bit / 10bit / 12bit / 14bit / 16bitに対応  
 ◇ ... 8bit / 10bit / 12bitに対応  
@@ -514,6 +517,22 @@ avformat + cuvid decoderを使用して読み込む。
 | AV1        | ○ |
 | VC-1       | ○ |
 | WMV3/WMV9  | × |
+
+### --cupr
+avformatでdemux、CUDAでProResをデコードして読み込む。avformatはdemux、timestamp、音声、字幕、データストリーム、attachmentの処理に使用し、ProRes映像packetはCUDAで直接NVEnc用のGPU surfaceへデコードする。
+
+現在は10bit ProRes 4:2:2入力に対応。
+
+CUDA出力形式はエンコーダ入力経路に合わせて選択する。一般的な8bit H.264出力ではNV12へ直接デコードし、10bit HEVC/AV1出力ではP010へ直接デコードする。4:2:2 10bitを保持する必要がある場合はP210を使用する。
+
+### --cupr-strategy &lt;string&gt;
+CUDA ProResデコードstrategyを指定する。
+
+```
+auto, lane8, lane16, dual, wide
+```
+
+デフォルト: auto。autoでは開始時に最初の数フレームでmicro benchmarkを行い、最速のstrategyを選択する。
 
 ### --interlace &lt;string&gt;
 **入力**フレームがインターレースかどうかと、そのフィールドオーダーを設定する。

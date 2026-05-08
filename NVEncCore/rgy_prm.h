@@ -2557,6 +2557,7 @@ struct RGYParamInput {
     RGYResizeResMode resizeResMode;
     bool ignoreSAR;
     tstring avswDecoder; //avswデコーダの指定
+    RGY_CUPR_DECODE_STRATEGY cuprStrategy;
 
     RGYParamInput();
     ~RGYParamInput();

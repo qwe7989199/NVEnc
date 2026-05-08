@@ -4860,6 +4860,31 @@ int parse_one_input_option(const TCHAR *option_name, const TCHAR *strInput[], in
         return 1;
 #endif
     }
+    if (IS_OPTION("cupr")) {
+#if ENABLE_AVSW_READER && ENCODER_NVENC
+        input->type = RGY_INPUT_FMT_CUPR;
+        return 0;
+#else
+        _ftprintf(stderr, _T("cupr reader not supported in this build.\n"));
+        return 1;
+#endif
+    }
+    if (IS_OPTION("cupr-strategy")) {
+#if ENABLE_AVSW_READER && ENCODER_NVENC
+        i++;
+        int value = 0;
+        if (get_list_value(list_cupr_decode_strategy, strInput[i], &value)) {
+            inprm->cuprStrategy = (RGY_CUPR_DECODE_STRATEGY)value;
+        } else {
+            print_cmd_error_invalid_value(option_name, strInput[i], list_cupr_decode_strategy);
+            return 1;
+        }
+        return 0;
+#else
+        _ftprintf(stderr, _T("cupr reader not supported in this build.\n"));
+        return 1;
+#endif
+    }
     if (IS_OPTION("tff")) {
         input->picstruct = RGY_PICSTRUCT_FRAME_TFF;
         return 0;
@@ -7597,7 +7622,11 @@ tstring gen_cmd(const VideoInfo *param, const VideoInfo *defaultPrm, const RGYPa
     case RGY_INPUT_FMT_VPY_MT: cmd << _T(" --vpy-mt"); break;
     case RGY_INPUT_FMT_AVHW:   cmd << _T(" --avhw"); break;
     case RGY_INPUT_FMT_AVSW:   cmd << _T(" --avsw"); if (!inprm->avswDecoder.empty()) cmd << _T(" ") << inprm->avswDecoder; break;
+    case RGY_INPUT_FMT_CUPR:   cmd << _T(" --cupr"); break;
     default: break;
+    }
+    if (param->type == RGY_INPUT_FMT_CUPR && (save_disabled_prm || inprm->cuprStrategy != inprmDefault->cuprStrategy)) {
+        cmd << _T(" --cupr-strategy ") << get_chr_from_value(list_cupr_decode_strategy, (int)inprm->cuprStrategy);
     }
     if (param->csp != RGY_CSP_NA) {
         OPT_LST(_T("--input-csp"), csp, list_rgy_csp);
@@ -9146,6 +9175,11 @@ tstring gen_cmd_help_input() {
 #if ENABLE_AVSW_READER
         _T("   --avhw                       use libavformat + hw decode for input\n")
         _T("   --avsw [<string>]            set input to use avcodec + sw decoder\n")
+#if ENCODER_NVENC
+        _T("   --cupr                       use libavformat demux + CUDA ProRes decode for input\n")
+        _T("   --cupr-strategy <string>      set CUDA ProRes decode strategy (default: auto)\n")
+        _T("                                 auto, lane8, lane16, dual, wide\n")
+#endif
 #endif
         _T("   --input-res <int>x<int>        set input resolution\n")
         _T("   --crop <int>,<int>,<int>,<int> crop pixels from left,top,right,bottom\n")

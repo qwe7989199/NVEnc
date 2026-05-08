@@ -815,6 +815,7 @@ nvenccore_sources = files(
   'NVEncCore/rgy_input_avcodec.cpp',
   'NVEncCore/rgy_input_avi.cpp',
   'NVEncCore/rgy_input_avs.cpp',
+  'NVEncCore/rgy_input_cupr.cpp',
   'NVEncCore/rgy_input_raw.cpp',
   'NVEncCore/rgy_input_sm.cpp',
   'NVEncCore/rgy_input_vpy.cpp',
@@ -898,6 +899,7 @@ cuda_sources = files(
   'NVEncCore/NVEncFilterUnsharp.cu',
   'NVEncCore/NVEncFilterWarpsharp.cu',
   'NVEncCore/NVEncFilterYadif.cu',
+  'NVEncCore/rgy_input_cupr.cu',
 )
 
 # ==============================================================================
