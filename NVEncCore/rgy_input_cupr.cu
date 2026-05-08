@@ -1,6 +1,6 @@
 #include "rgy_input_cupr_kernels.h"
 
-#include "../../../cu-pr-dec/kernels/prores_decode.cu"
+#include "rgy_input_cupr_prores_decode.cu"
 
 static_assert(sizeof(CuprSliceInfo) == sizeof(SliceInfo), "SliceInfo layout mismatch");
 
