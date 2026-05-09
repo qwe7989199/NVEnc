@@ -44,6 +44,7 @@
   - [--avhw](#--avhw)
   - [--cupr](#--cupr)
   - [--cupr-strategy \<string\>](#--cupr-strategy-string)
+  - [--nvj2k](#--nvj2k)
   - [--interlace \<string\>](#--interlace-string)
   - [--crop \<int\>,\<int\>,\<int\>,\<int\>](#--crop-intintintint)
   - [--frames \<int\>](#--frames-int)
@@ -470,6 +471,7 @@ NVEncの入力方法は下の表のとおり。入力フォーマットをして
 |               avhw   |   □   |      |        |   ◇   |       |       |
 |               avsw   |   ◎   |      |   ◎   |   ◎   |   ○  |   ○  |
 |               cupr   |       |      |   □   |        |       |       |
+|               nvj2k  |   □   |      |   □   |   □   |       |       |
 
 ◎ ... 8bit / 9bit / 10bit / 12bit / 14bit / 16bitに対応  
 ◇ ... 8bit / 10bit / 12bitに対応  
@@ -533,6 +535,11 @@ auto, lane8, lane16, dual, wide
 ```
 
 デフォルト: auto。autoでは開始時に最初の数フレームでmicro benchmarkを行い、最速のstrategyを選択する。
+
+### --nvj2k
+avformatでdemux、nvJPEG2000 CUDAでJPEG 2000をデコードして読み込む。avformatはdemux、timestamp、音声、字幕、データストリーム、attachmentの処理に使用し、JPEG 2000映像packetはCUDAで直接NVEnc用のGPU surfaceへデコードする。
+
+CUDA出力形式はエンコーダ入力経路に合わせて選択する。4:2:0出力ではNV12/P010、4:2:2出力ではNV16/P210、4:4:4出力ではYUV444/GBR surfaceへ直接デコードする。
 
 ### --interlace &lt;string&gt;
 **入力**フレームがインターレースかどうかと、そのフィールドオーダーを設定する。

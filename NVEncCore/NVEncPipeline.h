@@ -48,6 +48,7 @@
 #include "rgy_input.h"
 #include "rgy_input_avcodec.h"
 #include "rgy_input_cupr.h"
+#include "rgy_input_nvj2k.h"
 #include "rgy_input_sm.h"
 #include "rgy_output.h"
 #include "rgy_output_avcodec.h"
@@ -1391,6 +1392,106 @@ public:
         auto cuerr = cudaEventRecord(*cudaEvent, m_streamDecode);
         if (cuerr != cudaSuccess) {
             PrintMes(RGY_LOG_ERROR, _T("Failed to record cupr frame event: %s.\n"), char_to_tstring(cudaGetErrorString(cuerr)).c_str());
+            return err_to_rgy(cuerr);
+        }
+        m_outQeueue.push_back(std::make_unique<PipelineTaskOutputSurf>(m_dev->vidCtxLock(), surfWork, cudaEvent));
+        if (m_stopwatch) m_stopwatch->add(0, 2);
+        return RGY_ERR_NONE;
+    }
+    virtual RGY_ERR sendFrame([[maybe_unused]] std::unique_ptr<PipelineTaskOutput>& frame) override {
+        return LoadNextFrame();
+    }
+};
+
+class PipelineTaskNvJ2kInput : public PipelineTask {
+    RGYInputNvJ2k *m_input;
+    int64_t m_endPts;
+    cudaStream_t m_streamDecode;
+    RGYListRef<cudaEvent_t> m_frameUseFinEvent;
+public:
+    PipelineTaskNvJ2kInput(NVGPUInfo *dev, int outMaxQueueSize, RGYInputNvJ2k *input, int64_t endPts, RGYParamThread threadParam, std::shared_ptr<RGYLog> log)
+        : PipelineTask(PipelineTaskType::INPUTCU, dev, outMaxQueueSize, false, threadParam, log), m_input(input), m_endPts(endPts), m_streamDecode(nullptr), m_frameUseFinEvent() {
+        NVEncCtxAutoLock(ctxlock(m_dev->vidCtxLock()));
+        auto ret = cudaStreamCreateWithFlags(&m_streamDecode, cudaStreamNonBlocking);
+        if (ret != cudaSuccess) {
+            PrintMes(RGY_LOG_ERROR, _T("Failed to create nvj2k decode stream: %s.\n"), char_to_tstring(cudaGetErrorString(ret)).c_str());
+        }
+    }
+    virtual ~PipelineTaskNvJ2kInput() {
+        if (m_streamDecode) {
+            NVEncCtxAutoLock(ctxlock(m_dev->vidCtxLock()));
+            cudaStreamDestroy(m_streamDecode);
+        }
+        m_streamDecode = nullptr;
+        NVEncCtxAutoLock(ctxlock(m_dev->vidCtxLock()));
+        m_outQeueue.clear();
+        m_frameUseFinEvent.clear([](cudaEvent_t *event) { cudaEventDestroy(*event); });
+    }
+    virtual void setStopWatch() override {
+        m_stopwatch = std::make_unique<PipelineTaskStopWatch>(
+            std::vector<tstring>{ _T("getWorkSurf"), _T("nvj2kDecode") },
+            std::vector<tstring>{_T("")}
+        );
+    }
+    virtual std::optional<std::pair<RGYFrameInfo, int>> requiredSurfIn() override { return std::nullopt; };
+    virtual std::optional<std::pair<RGYFrameInfo, int>> requiredSurfOut() override {
+        const auto inputFrameInfo = m_input->GetInputFrameInfo();
+        RGYFrameInfo info(inputFrameInfo.srcWidth, inputFrameInfo.srcHeight, inputFrameInfo.csp, inputFrameInfo.bitdepth, inputFrameInfo.picstruct, RGY_MEM_TYPE_GPU);
+        return std::make_pair(info, m_outMaxQueueSize);
+    };
+    virtual RGY_ERR workSurfacesAllocCUBuf(const int numFrames, const RGYFrameInfo &frame) override {
+        auto sts = workSurfacesClear();
+        if (sts != RGY_ERR_NONE) {
+            PrintMes(RGY_LOG_ERROR, _T("allocWorkSurfaces:   Failed to clear old surfaces: %s.\n"), get_err_mes(sts));
+            return sts;
+        }
+        NVEncCtxAutoLock(ctxlock(m_dev->vidCtxLock()));
+        std::vector<std::unique_ptr<CUFrameBuf>> frames;
+        for (int i = 0; i < numFrames; i++) {
+            auto uptr = std::make_unique<CUFrameBuf>(frame);
+            auto ret = uptr->alloc(true);
+            if (ret != RGY_ERR_NONE) {
+                PrintMes(RGY_LOG_ERROR, _T("failed to alloc nvj2k frame: %s.\n"), get_err_mes(ret));
+                return ret;
+            }
+            frames.push_back(std::move(uptr));
+        }
+        m_workSurfs.setSurfaces(frames);
+        return RGY_ERR_NONE;
+    }
+    RGY_ERR LoadNextFrame() {
+        if (m_stopwatch) m_stopwatch->set(0);
+        auto surfWork = getWorkSurf();
+        if (surfWork == nullptr) {
+            PrintMes(RGY_LOG_ERROR, _T("failed to get work surface for nvj2k input.\n"));
+            return RGY_ERR_NOT_ENOUGH_BUFFER;
+        }
+        if (m_stopwatch) m_stopwatch->add(0, 1);
+        auto cuframe = surfWork.cubuf();
+        NVEncCtxAutoLock(ctxlock(m_dev->vidCtxLock()));
+        auto err = m_input->LoadNextFrameDevice(cuframe, m_streamDecode);
+        if (err != RGY_ERR_NONE) {
+            if (err == RGY_ERR_MORE_DATA) {
+                err = RGY_ERR_MORE_BITSTREAM;
+            } else {
+                PrintMes(RGY_LOG_ERROR, _T("Error in nvj2k reader: %s.\n"), get_err_mes(err));
+            }
+            return err;
+        }
+        cuframe->setInputFrameId(m_inFrames++);
+        if (m_endPts >= 0
+            && (int64_t)cuframe->timestamp() != AV_NOPTS_VALUE
+            && (int64_t)cuframe->timestamp() >= m_endPts) {
+            return RGY_ERR_MORE_BITSTREAM;
+        }
+        auto cudaEvent = m_frameUseFinEvent.get([](cudaEvent_t *event) { return cudaEventCreateWithFlags(event, cudaEventDefault) != cudaSuccess ? 1 : 0; });
+        if (!cudaEvent) {
+            PrintMes(RGY_LOG_ERROR, _T("Failed to get cuda event.\n"));
+            return RGY_ERR_UNKNOWN;
+        }
+        auto cuerr = cudaEventRecord(*cudaEvent, m_streamDecode);
+        if (cuerr != cudaSuccess) {
+            PrintMes(RGY_LOG_ERROR, _T("Failed to record nvj2k frame event: %s.\n"), char_to_tstring(cudaGetErrorString(cuerr)).c_str());
             return err_to_rgy(cuerr);
         }
         m_outQeueue.push_back(std::make_unique<PipelineTaskOutputSurf>(m_dev->vidCtxLock(), surfWork, cudaEvent));

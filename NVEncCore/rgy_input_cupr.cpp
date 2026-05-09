@@ -303,10 +303,12 @@ RGY_ERR RGYInputCupr::Init(const TCHAR *strFileName, VideoInfo *inputInfo, const
     avInitInfo.type = RGY_INPUT_FMT_AVANY;
     RGYInputAvcodecPrm avPrm(*cuprPrm);
     avPrm.avswDecoder.clear();
+    avPrm.disableVideoDecode = true;
     auto err = RGYInputAvcodec::Init(strFileName, &avInitInfo, &avPrm);
     if (err != RGY_ERR_NONE) {
         return err;
     }
+    m_readerName = _T("cupr");
     if (!m_Demux.video.stream || m_Demux.video.stream->codecpar->codec_id != AV_CODEC_ID_PRORES) {
         AddMessage(RGY_LOG_ERROR, _T("cupr input requires a ProRes video stream.\n"));
         return RGY_ERR_INVALID_CODEC;

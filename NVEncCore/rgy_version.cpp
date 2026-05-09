@@ -36,7 +36,7 @@
 const TCHAR *get_encoder_version() {
     return
         _T(ENCODER_NAME) _T(" (")
-        BUILD_ARCH_STR _T(") ") VER_STR_FILEVERSION_TCHAR _T(" (r") ENCODER_REV _T(") by rigaya, ")  _T(__DATE__) _T(" ") _T(__TIME__)
+        BUILD_ARCH_STR _T(") ") VER_STR_FILEVERSION_TCHAR _T("-domo (r") ENCODER_REV _T(") by rigaya, CUDA ProRes/nvJPEG2000 build by domo, ")  _T(__DATE__) _T(" ") _T(__TIME__)
 #if defined(_MSC_VER)
         _T(" (VC ") _T(SSTRING(_MSC_VER))
 #elif defined(__clang__)

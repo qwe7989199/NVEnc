@@ -54,7 +54,7 @@ tstring GetNVEncVersion() {
 #if ENABLE_AVSW_READER
     version += _T(", avsw");
     version += strsprintf(_T(", avhw [%s]"), getHWDecSupportedCodecList().c_str());
-    version += _T(", cupr");
+    version += _T(", cupr, nvj2k");
 #endif //#if ENABLE_AVSW_READER
     version += _T("\n");
     version += _T(" others\n");

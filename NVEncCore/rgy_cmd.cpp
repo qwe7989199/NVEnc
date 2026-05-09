@@ -4869,6 +4869,15 @@ int parse_one_input_option(const TCHAR *option_name, const TCHAR *strInput[], in
         return 1;
 #endif
     }
+    if (IS_OPTION("nvj2k")) {
+#if ENABLE_AVSW_READER && ENCODER_NVENC
+        input->type = RGY_INPUT_FMT_NVJ2K;
+        return 0;
+#else
+        _ftprintf(stderr, _T("nvj2k reader not supported in this build.\n"));
+        return 1;
+#endif
+    }
     if (IS_OPTION("cupr-strategy")) {
 #if ENABLE_AVSW_READER && ENCODER_NVENC
         i++;
@@ -7623,6 +7632,7 @@ tstring gen_cmd(const VideoInfo *param, const VideoInfo *defaultPrm, const RGYPa
     case RGY_INPUT_FMT_AVHW:   cmd << _T(" --avhw"); break;
     case RGY_INPUT_FMT_AVSW:   cmd << _T(" --avsw"); if (!inprm->avswDecoder.empty()) cmd << _T(" ") << inprm->avswDecoder; break;
     case RGY_INPUT_FMT_CUPR:   cmd << _T(" --cupr"); break;
+    case RGY_INPUT_FMT_NVJ2K:  cmd << _T(" --nvj2k"); break;
     default: break;
     }
     if (param->type == RGY_INPUT_FMT_CUPR && (save_disabled_prm || inprm->cuprStrategy != inprmDefault->cuprStrategy)) {
@@ -9179,6 +9189,7 @@ tstring gen_cmd_help_input() {
         _T("   --cupr                       use libavformat demux + CUDA ProRes decode for input\n")
         _T("   --cupr-strategy <string>      set CUDA ProRes decode strategy (default: auto)\n")
         _T("                                 auto, lane8, lane16, dual, wide\n")
+        _T("   --nvj2k                      use libavformat demux + nvJPEG2000 CUDA decode for input\n")
 #endif
 #endif
         _T("   --input-res <int>x<int>        set input resolution\n")

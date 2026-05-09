@@ -46,6 +46,7 @@
   - [--avhw](#--avhw)
   - [--cupr](#--cupr)
   - [--cupr-strategy \<string\>](#--cupr-strategy-string)
+  - [--nvj2k](#--nvj2k)
   - [--interlace \<string\>](#--interlace-string)
   - [--video-track \<int\>](#--video-track-int)
   - [--crop \<int\>,\<int\>,\<int\>,\<int\>](#--crop-intintintint)
@@ -458,6 +459,7 @@ reader used will be selected depending on the extension of input file.
 | avhw   |   □   |      |        |   ◇   |       |       |
 | avsw   |   ◎   |      |   ◎   |   ◎   |   ○  |   ○  |
 | cupr   |       |      |   □   |        |       |       |
+| nvj2k  |   □   |      |   □   |   □   |       |       |
 
 ◎ ... 8bit / 9bit / 10bit / 12bit / 14bit / 16bit supported  
 ◇ ... 8bit / 10bit / 12bit supported  
@@ -524,6 +526,11 @@ auto, lane8, lane16, dual, wide
 ```
 
 Default: auto. Auto benchmarks the first few frames at startup and selects the fastest strategy.
+
+### --nvj2k
+Read input file using avformat demux and nvJPEG2000 CUDA decode. In this mode, avformat is used for demuxing, timestamps, audio, subtitles, data streams and attachments, while JPEG 2000 video packets are decoded directly on CUDA into GPU surfaces for NVEnc.
+
+The CUDA output format is selected from the encoder input path, such as NV12/P010 for 4:2:0 output, NV16/P210 for 4:2:2 output, and YUV444/GBR surfaces for 4:4:4 output.
 
 ### --interlace &lt;string&gt;
 Set interlace flag of **input** frame.

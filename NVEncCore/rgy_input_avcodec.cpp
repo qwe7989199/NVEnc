@@ -230,6 +230,7 @@ RGYInputAvcodecPrm::RGYInputAvcodecPrm(RGYInputPrm base) :
     memType(0),
     pInputFormat(nullptr),
     readVideo(false),
+    disableVideoDecode(false),
     videoTrack(0),
     videoStreamId(0),
     readAudio(0),
@@ -2022,7 +2023,7 @@ RGY_ERR RGYInputAvcodec::Init(const TCHAR *strFileName, VideoInfo *inputInfo, co
                 AddMessage(RGY_LOG_INFO, _T("Using avsw reader as --tcfile-in is used.\n"));
             }
         }
-        if (m_inputVideoInfo.type != RGY_INPUT_FMT_AVSW) {
+        if (!input_prm->disableVideoDecode && m_inputVideoInfo.type != RGY_INPUT_FMT_AVSW) {
             for (const auto& devCodecCsp : *input_prm->HWDecCodecCsp) {
                 //VC-1では、pixelFormatがAV_PIX_FMT_NONEとなっている場合があるので、その場合は試しにAV_PIX_FMT_YUV420Pとして処理してみる
                 if (m_Demux.video.stream->codecpar->codec_id == AV_CODEC_ID_VC1 && (AVPixelFormat)m_Demux.video.stream->codecpar->format == AV_PIX_FMT_NONE) {
@@ -2056,8 +2057,14 @@ RGY_ERR RGYInputAvcodec::Init(const TCHAR *strFileName, VideoInfo *inputInfo, co
         if (m_inputVideoInfo.codec == RGY_CODEC_UNKNOWN) { //swデコードの場合
             avswDecoder = input_prm->avswDecoder;
         }
-        m_readerName = (m_Demux.video.HWDecodeDeviceId.size() > 0) ? _T("av" DECODER_NAME) : _T("avsw");
-        m_inputVideoInfo.type = (m_Demux.video.HWDecodeDeviceId.size() > 0) ? RGY_INPUT_FMT_AVHW : RGY_INPUT_FMT_AVSW;
+        if (input_prm->disableVideoDecode) {
+            m_Demux.video.HWDecodeDeviceId.clear();
+            m_readerName = _T("avdemux");
+            m_inputVideoInfo.codec = RGY_CODEC_UNKNOWN;
+        } else {
+            m_readerName = (m_Demux.video.HWDecodeDeviceId.size() > 0) ? _T("av" DECODER_NAME) : _T("avsw");
+            m_inputVideoInfo.type = (m_Demux.video.HWDecodeDeviceId.size() > 0) ? RGY_INPUT_FMT_AVHW : RGY_INPUT_FMT_AVSW;
+        }
         //念のため初期化
         m_trimParam.list.clear();
         m_trimParam.offset = 0;
@@ -2083,67 +2090,68 @@ RGY_ERR RGYInputAvcodec::Init(const TCHAR *strFileName, VideoInfo *inputInfo, co
             m_inputVideoInfo.codecExtraSize = m_Demux.video.stream->codecpar->extradata_size;
         }
 
-        AddMessage(RGY_LOG_DEBUG, _T("start predecode.\n"));
-
         //ヘッダーの取得を確認する
         RGY_ERR sts = RGY_ERR_NONE;
-        RGYBitstream bitstream = RGYBitstreamInit();
-        if (m_Demux.video.stream->codecpar->extradata) {
-            sts = GetHeader(&bitstream);
-            if (sts != RGY_ERR_NONE) {
-                //bsfsがオンであるために失敗した可能性がある
-                //一部のHEVCファイルでは、codecpar->extradataにヘッダの一部(たとえばextradata_size=23)しか
-                //格納されていないため、正常にヘッダの取得が行えない。
-                //またこのため、bsfs(HEVCmp42AnnexB)やparserが正常に動作しない。
-                //一方、swデコーダではbsfsは不要であることから、とりあえずそちらに切り替えてしまって動作させることにした
-                if (sts == RGY_ERR_MORE_DATA
-                    && (m_Demux.video.bsfcCtx || m_Demux.video.bUseHEVCmp42AnnexB)
-                    && !m_Demux.video.hdr10plusMetadataCopy
-                    && !m_Demux.video.doviRpuMetadataCopy) {
-                    if (m_inputVideoInfo.codec != RGY_CODEC_UNKNOWN) { //hwデコードを使用していた場合
-                        AddMessage(RGY_LOG_WARN, _T("Failed to get header for hardware decoder, switching to software decoder...\n"));
-                        if (input_prm->avswDecoder.length() != 0) {
-                            avswDecoder = input_prm->avswDecoder;
-                        } else if (ENCODER_QSV) {
-                            switch (m_inputVideoInfo.codec) {
-                            case RGY_CODEC_H264: avswDecoder = _T("h264_qsv"); break;
-                            case RGY_CODEC_HEVC: avswDecoder = _T("hevc_qsv"); break;
-                            case RGY_CODEC_AV1:  avswDecoder = _T("av1_qsv"); break;
-                            default: break;
-                            }
-                        } else if (ENCODER_NVENC) {
-                            switch (m_inputVideoInfo.codec) {
-                            case RGY_CODEC_H264: avswDecoder = _T("h264_cuvid"); break;
-                            case RGY_CODEC_HEVC: avswDecoder = _T("hevc_cuvid"); break;
-                            case RGY_CODEC_AV1:  avswDecoder = _T("av1_cuvid"); break;
-                            default: break;
-                            }
-                        }
-                        m_inputVideoInfo.codec = RGY_CODEC_UNKNOWN; //hwデコードをオフにする
-                        m_Demux.video.HWDecodeDeviceId.clear();
-                    }
-                    //close bitstreamfilter
-                    if (m_Demux.video.bsfcCtx) {
-                        AddMessage(RGY_LOG_DEBUG, _T("Free bsf...\n"));
-                        av_bsf_free(&m_Demux.video.bsfcCtx);
-                        AddMessage(RGY_LOG_DEBUG, _T("Freed bsf.\n"));
-                    }
-                    //bUseHEVCmp42AnnexBも無効化
-                    m_Demux.video.bUseHEVCmp42AnnexB = false;
-                    if (m_Demux.video.stream->codecpar->extradata_size) {
-                        m_inputVideoInfo.codecExtra = m_Demux.video.stream->codecpar->extradata;
-                        m_inputVideoInfo.codecExtraSize = m_Demux.video.stream->codecpar->extradata_size;
-                    }
-                    sts = GetHeader(&bitstream);
-                }
+        if (!input_prm->disableVideoDecode) {
+            AddMessage(RGY_LOG_DEBUG, _T("start predecode.\n"));
+            RGYBitstream bitstream = RGYBitstreamInit();
+            if (m_Demux.video.stream->codecpar->extradata) {
+                sts = GetHeader(&bitstream);
                 if (sts != RGY_ERR_NONE) {
-                    AddMessage(RGY_LOG_ERROR, _T("failed to get header.\n"));
-                    return sts;
+                    //bsfsがオンであるために失敗した可能性がある
+                    //一部のHEVCファイルでは、codecpar->extradataにヘッダの一部(たとえばextradata_size=23)しか
+                    //格納されていないため、正常にヘッダの取得が行えない。
+                    //またこのため、bsfs(HEVCmp42AnnexB)やparserが正常に動作しない。
+                    //一方、swデコーダではbsfsは不要であることから、とりあえずそちらに切り替えてしまって動作させることにした
+                    if (sts == RGY_ERR_MORE_DATA
+                        && (m_Demux.video.bsfcCtx || m_Demux.video.bUseHEVCmp42AnnexB)
+                        && !m_Demux.video.hdr10plusMetadataCopy
+                        && !m_Demux.video.doviRpuMetadataCopy) {
+                        if (m_inputVideoInfo.codec != RGY_CODEC_UNKNOWN) { //hwデコードを使用していた場合
+                            AddMessage(RGY_LOG_WARN, _T("Failed to get header for hardware decoder, switching to software decoder...\n"));
+                            if (input_prm->avswDecoder.length() != 0) {
+                                avswDecoder = input_prm->avswDecoder;
+                            } else if (ENCODER_QSV) {
+                                switch (m_inputVideoInfo.codec) {
+                                case RGY_CODEC_H264: avswDecoder = _T("h264_qsv"); break;
+                                case RGY_CODEC_HEVC: avswDecoder = _T("hevc_qsv"); break;
+                                case RGY_CODEC_AV1:  avswDecoder = _T("av1_qsv"); break;
+                                default: break;
+                                }
+                            } else if (ENCODER_NVENC) {
+                                switch (m_inputVideoInfo.codec) {
+                                case RGY_CODEC_H264: avswDecoder = _T("h264_cuvid"); break;
+                                case RGY_CODEC_HEVC: avswDecoder = _T("hevc_cuvid"); break;
+                                case RGY_CODEC_AV1:  avswDecoder = _T("av1_cuvid"); break;
+                                default: break;
+                                }
+                            }
+                            m_inputVideoInfo.codec = RGY_CODEC_UNKNOWN; //hwデコードをオフにする
+                            m_Demux.video.HWDecodeDeviceId.clear();
+                        }
+                        //close bitstreamfilter
+                        if (m_Demux.video.bsfcCtx) {
+                            AddMessage(RGY_LOG_DEBUG, _T("Free bsf...\n"));
+                            av_bsf_free(&m_Demux.video.bsfcCtx);
+                            AddMessage(RGY_LOG_DEBUG, _T("Freed bsf.\n"));
+                        }
+                        //bUseHEVCmp42AnnexBも無効化
+                        m_Demux.video.bUseHEVCmp42AnnexB = false;
+                        if (m_Demux.video.stream->codecpar->extradata_size) {
+                            m_inputVideoInfo.codecExtra = m_Demux.video.stream->codecpar->extradata;
+                            m_inputVideoInfo.codecExtraSize = m_Demux.video.stream->codecpar->extradata_size;
+                        }
+                        sts = GetHeader(&bitstream);
+                    }
+                    if (sts != RGY_ERR_NONE) {
+                        AddMessage(RGY_LOG_ERROR, _T("failed to get header.\n"));
+                        return sts;
+                    }
                 }
+                m_inputVideoInfo.codecExtra = m_Demux.video.extradata;
+                m_inputVideoInfo.codecExtraSize = m_Demux.video.extradataSize;
+                bitstream.clear();
             }
-            m_inputVideoInfo.codecExtra = m_Demux.video.extradata;
-            m_inputVideoInfo.codecExtraSize = m_Demux.video.extradataSize;
-            bitstream.clear();
         }
         if (input_prm->seekSec > 0.0f || input_prm->seekRatio > 0.0f) {
             auto [ret, firstpkt] = getSample();
@@ -2246,7 +2254,11 @@ RGY_ERR RGYInputAvcodec::Init(const TCHAR *strFileName, VideoInfo *inputInfo, co
         const auto aspectRatio = m_Demux.video.stream->codecpar->sample_aspect_ratio;
         const bool bAspectRatioUnknown = aspectRatio.num * aspectRatio.den <= 0;
 
-        if (!(m_Demux.video.HWDecodeDeviceId.size() > 0)) {
+        if (input_prm->disableVideoDecode) {
+            m_Demux.video.HWDecodeDeviceId.clear();
+            m_inputVideoInfo.csp = inputInfo->csp;
+            m_inputVideoInfo.bitdepth = (inputInfo->csp != RGY_CSP_NA) ? RGY_CSP_BIT_DEPTH[inputInfo->csp] : inputInfo->bitdepth;
+        } else if (!(m_Demux.video.HWDecodeDeviceId.size() > 0)) {
             auto err = initSWVideoDecoder(avswDecoder);
             if (err != RGY_ERR_NONE) {
                 AddMessage(RGY_LOG_ERROR, _T("Failed to initialize video decoder.\n"));
@@ -2298,7 +2310,13 @@ RGY_ERR RGYInputAvcodec::Init(const TCHAR *strFileName, VideoInfo *inputInfo, co
         } else {
             m_inputVideoInfo.picstruct = RGY_PICSTRUCT_AUTO; // インタレ指定だが、インタレが検出されていないときはauto
         }
-        setInputInfo();
+        if (input_prm->disableVideoDecode) {
+            m_inputInfo = strsprintf(_T("avdemux: %s, %dx%d, %d/%d fps"),
+                char_to_tstring(avcodec_get_name(m_Demux.video.stream->codecpar->codec_id)).c_str(),
+                m_inputVideoInfo.srcWidth, m_inputVideoInfo.srcHeight, m_inputVideoInfo.fpsN, m_inputVideoInfo.fpsD);
+        } else {
+            setInputInfo();
+        }
         if (m_Demux.video.stream) {
             AddMessage(RGY_LOG_DEBUG, _T("streamFirstKeyPts: %lld\n"), (long long int)m_Demux.video.streamFirstKeyPts);
             AddMessage(RGY_LOG_DEBUG, m_inputVideoInfo.vui.print_all());

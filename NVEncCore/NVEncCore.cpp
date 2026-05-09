@@ -3063,6 +3063,11 @@ RGY_ERR NVEncCore::InitFilters(const InEncodeVideoParam *inputParam) {
     case RGY_CSP_P010A: filterCsp = RGY_CSP_YUVA420_16; break;
     default: break;
     }
+    if (RGY_CSP_CHROMA_FORMAT[inputFrame.csp] == RGY_CHROMAFMT_RGB
+        && (encCsp == RGY_CSP_NV12 || encCsp == RGY_CSP_P010)
+        && filterPipeline.size() == 1 && filterPipeline.front() == VppType::CL_CROP) {
+        filterCsp = encCsp;
+    }
     if (inputParam->vpp.afs.enable && RGY_CSP_CHROMA_FORMAT[inputFrame.csp] == RGY_CHROMAFMT_YUV444) {
         filterCsp = (RGY_CSP_BIT_DEPTH[inputFrame.csp] > 8) ? RGY_CSP_YUV444_16 : RGY_CSP_YUV444;
     }
@@ -4826,7 +4831,9 @@ RGY_ERR NVEncCore::initPipeline(const InEncodeVideoParam *prm) {
         taskNVDec = dynamic_cast<PipelineTaskNVDecode *>(m_pipelineTasks.back().get());
     } else {
 #if ENABLE_AVSW_READER && ENCODER_NVENC
-        if (auto cuprReader = dynamic_cast<RGYInputCupr *>(m_pFileReader.get()); cuprReader != nullptr) {
+        if (auto nvj2kReader = dynamic_cast<RGYInputNvJ2k *>(m_pFileReader.get()); nvj2kReader != nullptr) {
+            m_pipelineTasks.push_back(std::make_unique<PipelineTaskNvJ2kInput>(m_dev.get(), 1, nvj2kReader, parallelEncEndPts, prm->ctrl.threadParams.get(RGYThreadType::INPUT), m_pLog));
+        } else if (auto cuprReader = dynamic_cast<RGYInputCupr *>(m_pFileReader.get()); cuprReader != nullptr) {
             m_pipelineTasks.push_back(std::make_unique<PipelineTaskCuprInput>(m_dev.get(), 1, cuprReader, parallelEncEndPts, prm->ctrl.threadParams.get(RGYThreadType::INPUT), m_pLog));
         } else
 #endif
