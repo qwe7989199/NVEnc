@@ -5,8 +5,13 @@ on:
     branches:
       - master
       - actions
+      - cupr-prores-cuda-input
     tags:
       - '*'
+  workflow_dispatch:
+
+env:
+  NVJPEG2K_BUILD: "0.10.0.49"
 
 jobs:
   get_version_name:
@@ -64,12 +69,14 @@ jobs:
             cuda_ver_major: 11
             cuda_ver_minor: 8
             cuda_download_url: https://developer.download.nvidia.com/compute/cuda/11.8.0/network_installers/cuda_11.8.0_windows_network.exe
+            nvjpeg2k_cuda_major: ''
           - arch: x64
             platform: x64
             outext: auo2
             cuda_ver_major: 11
             cuda_ver_minor: 8
             cuda_download_url: https://developer.download.nvidia.com/compute/cuda/11.8.0/network_installers/cuda_11.8.0_windows_network.exe
+            nvjpeg2k_cuda_major: 12
     
     steps:
       - name: Checkout
@@ -101,6 +108,24 @@ jobs:
           curl -s -o cuda_installer.exe -L ${{ matrix.cuda_download_url }}
           cuda_installer.exe -s nvcc_${{ matrix.cuda_ver_major }}.${{ matrix.cuda_ver_minor }} cudart_${{ matrix.cuda_ver_major }}.${{ matrix.cuda_ver_minor }} curand_${{ matrix.cuda_ver_major }}.${{ matrix.cuda_ver_minor }} curand_dev_${{ matrix.cuda_ver_major }}.${{ matrix.cuda_ver_minor }} npp_${{ matrix.cuda_ver_major }}.${{ matrix.cuda_ver_minor }} npp_dev_${{ matrix.cuda_ver_major }}.${{ matrix.cuda_ver_minor }} nvml_dev_${{ matrix.cuda_ver_major }}.${{ matrix.cuda_ver_minor }} nvrtc_${{ matrix.cuda_ver_major }}.${{ matrix.cuda_ver_minor }} nvrtc_dev_${{ matrix.cuda_ver_major }}.${{ matrix.cuda_ver_minor }} visual_studio_integration_${{ matrix.cuda_ver_major }}.${{ matrix.cuda_ver_minor }}
 
+      - name: Download nvJPEG2000 SDK ${{ env.NVJPEG2K_BUILD }} (cuda${{ matrix.nvjpeg2k_cuda_major }})
+        if: matrix.arch == 'x64'
+        shell: pwsh
+        run: |
+          $build = "${{ env.NVJPEG2K_BUILD }}"
+          $major = "${{ matrix.nvjpeg2k_cuda_major }}"
+          $url = "https://developer.download.nvidia.com/compute/nvjpeg2000/redist/libnvjpeg_2k/windows-x86_64/libnvjpeg_2k-windows-x86_64-${build}_cuda${major}-archive.zip"
+          Write-Host "Fetching $url"
+          Invoke-WebRequest -Uri $url -OutFile nvjpeg2k.zip -UseBasicParsing
+          Expand-Archive -Path nvjpeg2k.zip -DestinationPath "$env:RUNNER_TEMP\nvjpeg2000-raw" -Force
+          $inner = Get-ChildItem "$env:RUNNER_TEMP\nvjpeg2000-raw" | Select-Object -First 1
+          $dest = Join-Path $env:RUNNER_TEMP "nvjpeg2000"
+          if (Test-Path $dest) { Remove-Item $dest -Recurse -Force }
+          Move-Item $inner.FullName $dest
+          Write-Host "Layout:"
+          Get-ChildItem $dest -Recurse -Depth 2 | Select-Object FullName
+          "NVJPEG2K_ROOT=$dest" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+
       - name: MSBuild
         run: |
           chcp 932
@@ -129,8 +154,16 @@ jobs:
           mkdir NVEncC_Release
           copy _build\${{ matrix.platform }}\RelStatic\NVEncC*.exe NVEncC_Release
           copy _build\${{ matrix.platform }}\RelStatic\*.dll NVEncC_Release
+          if "${{ matrix.arch }}" == "x64" set CUDA_BIN=C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v${{ matrix.cuda_ver_major }}.${{ matrix.cuda_ver_minor }}\bin\x64
+          if "${{ matrix.arch }}" == "x64" if not exist "%CUDA_BIN%\cudart64_*.dll" set CUDA_BIN=C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v${{ matrix.cuda_ver_major }}.${{ matrix.cuda_ver_minor }}\bin
+          if "${{ matrix.arch }}" == "x64" set NVJPEG2K_BIN=%NVJPEG2K_ROOT%\bin\${{ matrix.nvjpeg2k_cuda_major }}
+          if "${{ matrix.arch }}" == "x64" if not exist "%NVJPEG2K_BIN%\nvjpeg2k_0.dll" set NVJPEG2K_BIN=%NVJPEG2K_ROOT%\bin
           if "${{ matrix.arch }}" == "x64" copy "C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v${{ matrix.cuda_ver_major }}.${{ matrix.cuda_ver_minor }}\bin\nvrtc64_*_0.dll" NVEncC_Release
           if "${{ matrix.arch }}" == "x64" copy "C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v${{ matrix.cuda_ver_major }}.${{ matrix.cuda_ver_minor }}\bin\nvrtc-builtins64_*.dll" NVEncC_Release
+          if "${{ matrix.arch }}" == "x64" copy "%CUDA_BIN%\cudart64_*.dll" NVEncC_Release
+          if "${{ matrix.arch }}" == "x64" copy "%CUDA_BIN%\nppc64_*.dll" NVEncC_Release
+          if "${{ matrix.arch }}" == "x64" copy "%CUDA_BIN%\nppial64_*.dll" NVEncC_Release
+          if "${{ matrix.arch }}" == "x64" copy "%NVJPEG2K_BIN%\*.dll" NVEncC_Release
           if "${{ matrix.arch }}" == "x64" copy NVEncNVOFFRUCBin\*.dll NVEncC_Release
           if "${{ matrix.arch }}" == "x64" copy NVEncNVSDKNGXBin\*.dll NVEncC_Release
           if "${{ matrix.arch }}" == "x64" copy libvship_nvidia_5_0\*.dll NVEncC_Release
