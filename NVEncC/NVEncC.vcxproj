@@ -445,13 +445,16 @@ copy /y "$(SolutionDir)ffmpeg_lgpl\lib\$(PlatformName)\libplacebo-*.dll" "$(OutD
       <AdditionalManifestFiles>NVEncC.manifest</AdditionalManifestFiles>
     </Manifest>
     <PostBuildEvent>
-      <Command>copy /y "$(SolutionDir)ffmpeg_lgpl\bin\avcodec-*.dll"  "$(OutDir)" &gt; NUL
-copy /y "$(SolutionDir)ffmpeg_lgpl\bin\avfilter-*.dll" "$(OutDir)" &gt; NUL
-copy /y "$(SolutionDir)ffmpeg_lgpl\bin\avformat-*.dll" "$(OutDir)" &gt; NUL
-copy /y "$(SolutionDir)ffmpeg_lgpl\bin\avutil-*.dll" "$(OutDir)" &gt; NUL
-copy /y "$(SolutionDir)ffmpeg_lgpl\bin\swresample-*.dll" "$(OutDir)" &gt; NUL
-copy /y "$(SolutionDir)ffmpeg_lgpl\bin\swscale-*.dll" "$(OutDir)" &gt; NUL
-copy /y "$(SolutionDir)ffmpeg_lgpl\bin\avdevice-*.dll" "$(OutDir)" &gt; NUL</Command>
+      <Command>copy /y "$(SolutionDir)ffmpeg_lgpl\lib\$(PlatformName)\avcodec-*.dll"  "$(OutDir)" &gt; NUL
+copy /y "$(SolutionDir)ffmpeg_lgpl\lib\$(PlatformName)\avfilter-*.dll" "$(OutDir)" &gt; NUL
+copy /y "$(SolutionDir)ffmpeg_lgpl\lib\$(PlatformName)\avformat-*.dll" "$(OutDir)" &gt; NUL
+copy /y "$(SolutionDir)ffmpeg_lgpl\lib\$(PlatformName)\avutil-*.dll" "$(OutDir)" &gt; NUL
+copy /y "$(SolutionDir)ffmpeg_lgpl\lib\$(PlatformName)\swresample-*.dll" "$(OutDir)" &gt; NUL
+copy /y "$(SolutionDir)ffmpeg_lgpl\lib\$(PlatformName)\swscale-*.dll" "$(OutDir)" &gt; NUL
+copy /y "$(SolutionDir)ffmpeg_lgpl\lib\$(PlatformName)\avdevice-*.dll" "$(OutDir)" &gt; NUL
+copy /y "$(SolutionDir)ffmpeg_lgpl\lib\$(PlatformName)\libass-*.dll" "$(OutDir)" &gt; NUL
+copy /y "$(SolutionDir)ffmpeg_lgpl\lib\$(PlatformName)\libvmaf.dll" "$(OutDir)" &gt; NUL
+copy /y "$(SolutionDir)ffmpeg_lgpl\lib\$(PlatformName)\libplacebo-*.dll" "$(OutDir)" &gt; NUL</Command>
     </PostBuildEvent>
     <CudaCompile>
       <InterleaveSourceInPTX>true</InterleaveSourceInPTX>
