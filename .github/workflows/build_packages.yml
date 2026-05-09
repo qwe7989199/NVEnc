@@ -6,6 +6,7 @@ on:
       - master
       - linux
       - ffmpeg5
+      - cupr-prores-cuda-input
     tags:
       - '*'
 
@@ -67,10 +68,11 @@ jobs:
           cd ${{ github.workspace }}
           TAG=$(echo ${{ github.ref }} | sed -e "s#refs/tags/##g")
           VER=$(sed -n 's/^#define VER_STR_FILEVERSION[ \t]*"\([^"]*\)".*$/\1/p' NVEncCore/rgy_version.h | tr -d '\r\n')
-          if [ "$TAG" = "$VER" ] || [ "${TAG#v}" = "$VER" ]; then
+          TAG_BASE="${TAG#v}"
+          if [ "$TAG_BASE" = "$VER" ] || [ "$TAG_BASE" = "${VER}-domo" ]; then
             echo "Version OK: tag=${TAG}, header=${VER}"
           else
-            echo "ERROR: Tag version (${TAG}) does not match VER_STR_FILEVERSION (${VER})" >&2
+            echo "ERROR: Tag version (${TAG}) does not match VER_STR_FILEVERSION (${VER}) or ${VER}-domo" >&2
             exit 1
           fi
 
