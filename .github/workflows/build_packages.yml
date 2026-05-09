@@ -28,9 +28,9 @@ jobs:
           #  arch: arm64
 
     env:
+      DOCKER_FILE: docker/docker_${{ matrix.dockerimg }}
       DOCKER_IMAGE: ${{ matrix.dockerimg }}
       PKG_TYPE: ${{ matrix.pkgtype }}
-      BASE_IMAGE_REPO: ghcr.io/${{ github.repository_owner }}/nvenc-build
       FFMPEG_PREFIX: /opt/build_scripts/ffmpeg_dll/build_dll/x64/build
       VMAF_PREFIX: /opt/build_scripts/ffmpeg_dll/x64/build
       NVENC_HEADER_DIR: /opt/nvenc_headers
@@ -46,12 +46,14 @@ jobs:
         run: |
           REPOSITORY=$(echo ${{ github.repository }} | sed -e "s#.*/##")
           VERSION=$(echo ${{ github.ref }} | sed -e "s#refs/tags/##g")
+          IMAGE="build_nvencc_${{ env.DOCKER_IMAGE }}"
+          TAG=$(echo $GITHUB_SHA | head -c7)
           NPROC=$(grep 'processor' /proc/cpuinfo | wc -l)
           OUTPUT_DIR=`pwd`/output
           LOCAL_USER_ID=$(id -u)
           LOCAL_GROUP_ID=$(id -g)
-          BASE_IMAGE="${{ env.BASE_IMAGE_REPO }}:${{ env.DOCKER_IMAGE }}"
-          echo "base_image=${BASE_IMAGE}" >> $GITHUB_OUTPUT
+          echo "tagged_image=${IMAGE}:${TAG}" >> $GITHUB_OUTPUT
+          echo "tag=${TAG}" >> $GITHUB_OUTPUT
           echo "nproc=${NPROC}" >> $GITHUB_OUTPUT
           echo "output_dir=${OUTPUT_DIR}" >> $GITHUB_OUTPUT
           echo "local_user_id=${LOCAL_USER_ID}" >> $GITHUB_OUTPUT
@@ -77,9 +79,6 @@ jobs:
             exit 1
           fi
 
-      - name: Pull base image
-        run: docker pull ${{ steps.prep.outputs.base_image }}
-
       - name: Create Output Dir
         run: |
           mkdir -p ${{ steps.prep.outputs.output_dir }}
@@ -91,12 +90,13 @@ jobs:
       - name: Build Exec
         id: build_exec
         run: |
+          docker build --build-arg LOCAL_USER_ID=${{ steps.prep.outputs.local_user_id }} --build-arg LOCAL_GROUP_ID=${{ steps.prep.outputs.local_group_id }} --tag ${{ steps.prep.outputs.tagged_image }} --platform linux/${{ matrix.arch }} --file ${{ env.DOCKER_FILE }} ./
           docker run -dit --rm \
             -v ${{ github.workspace }}:/work \
              -v ${{ steps.prep.outputs.output_dir }}:/output \
             -u "$(id -u):$(id -g)" \
             --workdir /work \
-            --name build_pkg ${{ steps.prep.outputs.base_image }}
+            --name build_pkg ${{ steps.prep.outputs.tagged_image }}
           docker exec build_pkg bash -lc '
             VMAFPKG="${{ env.VMAF_PREFIX }}/lib/pkgconfig"
             FFPKG="${{ env.FFMPEG_PREFIX }}/lib/pkgconfig:${{ env.FFMPEG_PREFIX }}/lib/x86_64-linux-gnu/pkgconfig"

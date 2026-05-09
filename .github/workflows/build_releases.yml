@@ -164,14 +164,16 @@ jobs:
           copy _build\${{ matrix.platform }}\RelStatic\*.dll NVEncC_Release
           if "${{ matrix.arch }}" == "x64" set CUDA_BIN=C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v${{ matrix.cuda_ver_major }}.${{ matrix.cuda_ver_minor }}\bin\x64
           if "${{ matrix.arch }}" == "x64" if not exist "%CUDA_BIN%\cudart64_*.dll" set CUDA_BIN=C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v${{ matrix.cuda_ver_major }}.${{ matrix.cuda_ver_minor }}\bin
-          if "${{ matrix.arch }}" == "x64" set NVJPEG2K_BIN=%NVJPEG2K_ROOT%\bin\${{ matrix.nvjpeg2k_cuda_major }}
-          if "${{ matrix.arch }}" == "x64" if not exist "%NVJPEG2K_BIN%\nvjpeg2k_0.dll" set NVJPEG2K_BIN=%NVJPEG2K_ROOT%\bin
+          if "${{ matrix.arch }}" == "x64" set NVJPEG2K_BIN=%NVJPEG2K_ROOT%\lib\${{ matrix.nvjpeg2k_cuda_major }}
+          if "${{ matrix.arch }}" == "x64" if not exist "%NVJPEG2K_BIN%\nvjpeg2k_0.dll" set NVJPEG2K_BIN=%NVJPEG2K_ROOT%\lib
+          if "${{ matrix.arch }}" == "x64" if not exist "%NVJPEG2K_BIN%\nvjpeg2k_0.dll" (echo nvJPEG2000 DLL not found under %NVJPEG2K_ROOT% & exit /b 1)
           if "${{ matrix.arch }}" == "x64" copy "C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v${{ matrix.cuda_ver_major }}.${{ matrix.cuda_ver_minor }}\bin\nvrtc64_*_0.dll" NVEncC_Release
           if "${{ matrix.arch }}" == "x64" copy "C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v${{ matrix.cuda_ver_major }}.${{ matrix.cuda_ver_minor }}\bin\nvrtc-builtins64_*.dll" NVEncC_Release
           if "${{ matrix.arch }}" == "x64" copy "%CUDA_BIN%\cudart64_*.dll" NVEncC_Release
           if "${{ matrix.arch }}" == "x64" copy "%CUDA_BIN%\nppc64_*.dll" NVEncC_Release
           if "${{ matrix.arch }}" == "x64" copy "%CUDA_BIN%\nppial64_*.dll" NVEncC_Release
-          if "${{ matrix.arch }}" == "x64" copy "%NVJPEG2K_BIN%\*.dll" NVEncC_Release
+          if "${{ matrix.arch }}" == "x64" copy /y "%NVJPEG2K_BIN%\nvjpeg2k_0.dll" NVEncC_Release
+          if "${{ matrix.arch }}" == "x64" if not exist NVEncC_Release\nvjpeg2k_0.dll (echo nvjpeg2k_0.dll was not packaged & exit /b 1)
           if "${{ matrix.arch }}" == "x64" copy NVEncNVOFFRUCBin\*.dll NVEncC_Release
           if "${{ matrix.arch }}" == "x64" copy NVEncNVSDKNGXBin\*.dll NVEncC_Release
           if "${{ matrix.arch }}" == "x64" copy libvship_nvidia_5_0\*.dll NVEncC_Release
