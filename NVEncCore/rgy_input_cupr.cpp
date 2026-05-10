@@ -301,7 +301,7 @@ RGY_ERR RGYInputCupr::Init(const TCHAR *strFileName, VideoInfo *inputInfo, const
 
     VideoInfo avInitInfo = *inputInfo;
     avInitInfo.type = RGY_INPUT_FMT_AVANY;
-    RGYInputAvcodecPrm avPrm(*cuprPrm);
+    RGYInputAvcodecPrm avPrm(static_cast<const RGYInputAvcodecPrm&>(*cuprPrm));
     avPrm.avswDecoder.clear();
     avPrm.disableVideoDecode = true;
     auto err = RGYInputAvcodec::Init(strFileName, &avInitInfo, &avPrm);

@@ -290,7 +290,7 @@ RGY_ERR RGYInputNvJ2k::Init(const TCHAR *strFileName, VideoInfo *inputInfo, cons
 
     VideoInfo avInitInfo = *inputInfo;
     avInitInfo.type = RGY_INPUT_FMT_AVANY;
-    RGYInputAvcodecPrm avPrm(*nvj2kPrm);
+    RGYInputAvcodecPrm avPrm(static_cast<const RGYInputAvcodecPrm&>(*nvj2kPrm));
     avPrm.avswDecoder.clear();
     avPrm.disableVideoDecode = true;
     auto err = RGYInputAvcodec::Init(strFileName, &avInitInfo, &avPrm);
