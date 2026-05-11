@@ -2,11 +2,6 @@ name: Build Linux Packages
 
 on:
   push:
-    branches:
-      - master
-      - linux
-      - ffmpeg5
-      - cupr-prores-cuda-input
     tags:
       - '*'
   workflow_dispatch:
