@@ -71,6 +71,7 @@ private:
     void *m_jpStream;
     RGY_CSP m_outputCsp;
     DevicePlane *m_planes;
+    bool m_sourceXyz;
 };
 
 #endif //ENABLE_AVSW_READER && ENCODER_NVENC

@@ -25,6 +25,7 @@ cudaError_t nvj2k_convert_to_surface_async(
     int width,
     int height,
     RGY_CSP dst_csp,
+    bool xyz_input,
     cudaStream_t stream);
 
 #endif //__RGY_INPUT_NVJ2K_KERNELS_H__

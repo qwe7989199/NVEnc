@@ -1714,13 +1714,21 @@ RGY_ERR NVEncCore::SetInputParam(InEncodeVideoParam *inputParam) {
         }
         return RGY_ERR_UNSUPPORTED;
     }
-    if ((inputParam->input.crop.e.left & 1) || (inputParam->input.crop.e.right & 1)
-        || (inputParam->input.crop.e.up & height_check_mask) || (inputParam->input.crop.e.bottom & height_check_mask)) {
+    const auto inputChromaFmt = RGY_CSP_CHROMA_FORMAT[inputParam->input.csp];
+    const auto encChromaFmt = RGY_CSP_CHROMA_FORMAT[GetEncoderCSP(inputParam)];
+    const bool inputHSubsampled = inputChromaFmt == RGY_CHROMAFMT_YUV420 || inputChromaFmt == RGY_CHROMAFMT_YUV422;
+    const bool inputVSubsampled = inputChromaFmt == RGY_CHROMAFMT_YUV420;
+    const int crop_width_check_mask = ((encChromaFmt == RGY_CHROMAFMT_YUV420 || encChromaFmt == RGY_CHROMAFMT_YUV422) && inputHSubsampled) ? 1 : 0;
+    const int crop_height_check_mask = (is_interlaced(m_stPicStruct)) ? height_check_mask : ((encChromaFmt == RGY_CHROMAFMT_YUV420 && inputVSubsampled) ? 1 : 0);
+    if ((inputParam->input.crop.e.left & crop_width_check_mask) || (inputParam->input.crop.e.right & crop_width_check_mask)
+        || (inputParam->input.crop.e.up & crop_height_check_mask) || (inputParam->input.crop.e.bottom & crop_height_check_mask)) {
         PrintMes(RGY_LOG_ERROR, _T("%s: %dx%d, Crop [%d,%d,%d,%d]\n"),
              FOR_AUO ? _T("Crop値が無効です。") : _T("Invalid crop value."),
             inputParam->input.srcWidth, inputParam->input.srcHeight,
             inputParam->input.crop.c[0], inputParam->input.crop.c[1], inputParam->input.crop.c[2], inputParam->input.crop.c[3]);
-        PrintMes(RGY_LOG_ERROR, FOR_AUO ? _T("Crop値は2の倍数である必要があります。\n") : _T("Crop value of mod2 required.\n"));
+        if (crop_width_check_mask || crop_height_check_mask == 1) {
+            PrintMes(RGY_LOG_ERROR, FOR_AUO ? _T("Crop値は2の倍数である必要があります。\n") : _T("Crop value of mod2 required.\n"));
+        }
         if (is_interlaced(m_stPicStruct)) {
             PrintMes(RGY_LOG_ERROR, FOR_AUO ? _T("さらに、インタレ保持エンコードでは縦Crop値は4の倍数である必要があります。\n") : _T("For interlaced encoding, mod4 is required for height.\n"));
         }
@@ -2958,7 +2966,7 @@ std::vector<VppType> NVEncCore::InitFiltersCreateVppList(const InEncodeVideoPara
 RGY_ERR NVEncCore::InitFilters(const InEncodeVideoParam *inputParam) {
     //cuvidデコーダの場合、cropを入力時に行っていない場合がある
     const bool cropRequired = cropEnabled(inputParam->input.crop)
-        && m_pFileReader->getInputCodec() != RGY_CODEC_UNKNOWN
+        && (m_pFileReader->getInputCodec() != RGY_CODEC_UNKNOWN || inputParam->input.type == RGY_INPUT_FMT_CUPR || inputParam->input.type == RGY_INPUT_FMT_NVJ2K)
         && CUVID_DISABLE_CROP;
 
     RGYFrameInfo inputFrame;

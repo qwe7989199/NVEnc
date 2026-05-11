@@ -205,6 +205,81 @@ __global__ void nvj2k_pack_planar16_kernel(
     dst2[(size_t)y * pitch2 + x] = nvj2k_to_u16_msb(nvj2k_read_fullres(s2, width, height, x, y), s2.precision);
 }
 
+// XYZ(DCI) -> linear BT.709 RGB -> BT.1886 (pure 2.4 power) encoded RGB, output as uint16 MSB-aligned planar.
+// Why BT.1886 and not BT.709 OETF: DCP-o-matic and most BT.709-to-DCP packagers assume
+// a BT.1886 (gamma 2.4) input characteristic on the source side. Using the BT.709 OETF
+// here (2.222 + linear toe) would crush the shadows slightly compared to the source,
+// because the encoding function is not the mathematical inverse of the decoding function
+// the packager used. BT.1886 gives a proper round-trip.
+__device__ __forceinline__ float nvj2k_xyz_bt1886_encode(float L) {
+    // BT.1886 OETF = x^(1/2.4). Pure power law, no linear toe.
+    if (L <= 0.0f) return 0.0f;
+    return __powf(L, 1.0f / 2.4f);
+}
+
+__global__ void nvj2k_pack_xyz_to_bt709_kernel(
+    NvJ2kPlane sX,
+    NvJ2kPlane sY,
+    NvJ2kPlane sZ,
+    uint16_t *dstR,
+    uint16_t *dstG,
+    uint16_t *dstB,
+    int pitchR,
+    int pitchG,
+    int pitchB,
+    int width,
+    int height) {
+    const int x = blockIdx.x * blockDim.x + threadIdx.x;
+    const int y = blockIdx.y * blockDim.y + threadIdx.y;
+    if (x >= width || y >= height) {
+        return;
+    }
+    // Composed matrix: XYZ(D65) -> linear BT.709 RGB.
+    // No chromatic adaptation is applied because DCP-o-matic (and typical RGB->DCP
+    // packagers) encode the scene under a D65-referenced illuminant: BT.709 D65 primaries
+    // are mapped directly through the BT.709 RGB->XYZ matrix, with no DCI-white rotation.
+    // The DCI 2.6 gamma decode and 52.37/48 full-scale factor are applied separately below.
+    const float m00 = +3.24096994f, m01 = -1.53738318f, m02 = -0.49861076f;
+    const float m10 = -0.96924364f, m11 = +1.87596750f, m12 = +0.04155506f;
+    const float m20 = +0.05563008f, m21 = -0.20397696f, m22 = +1.05697151f;
+
+    const int codeX = nvj2k_read_fullres(sX, width, height, x, y);
+    const int codeY = nvj2k_read_fullres(sY, width, height, x, y);
+    const int codeZ = nvj2k_read_fullres(sZ, width, height, x, y);
+
+    // DCP codes are 12-bit. nvJPEG2000 reports precision==12 for xyz12 streams.
+    // If precision differs, fall back to the plane's precision.
+    const float normX = __fmul_rn((float)codeX, 1.0f / ((1 << sX.precision) - 1));
+    const float normY = __fmul_rn((float)codeY, 1.0f / ((1 << sY.precision) - 1));
+    const float normZ = __fmul_rn((float)codeZ, 1.0f / ((1 << sZ.precision) - 1));
+
+    // DCI 2.6 gamma decode + full-scale 52.37/48 factor.
+    const float kDciScale = 52.37f / 48.0f;
+    const float linX = __powf(normX, 2.6f) * kDciScale;
+    const float linY = __powf(normY, 2.6f) * kDciScale;
+    const float linZ = __powf(normZ, 2.6f) * kDciScale;
+
+    // 3x3 matrix mul: XYZ(DCI) -> linear BT.709 RGB.
+    const float linR = m00 * linX + m01 * linY + m02 * linZ;
+    const float linG = m10 * linX + m11 * linY + m12 * linZ;
+    const float linB = m20 * linX + m21 * linY + m22 * linZ;
+
+    // Clamp to [0, 1] (gamut compression is out-of-scope; clipping is simple and predictable).
+    const float cR = fminf(fmaxf(linR, 0.0f), 1.0f);
+    const float cG = fminf(fmaxf(linG, 0.0f), 1.0f);
+    const float cB = fminf(fmaxf(linB, 0.0f), 1.0f);
+
+    // BT.1886 (pure 2.4 power) encode to match DCP-o-matic's assumed source characteristic.
+    const float eR = nvj2k_xyz_bt1886_encode(cR);
+    const float eG = nvj2k_xyz_bt1886_encode(cG);
+    const float eB = nvj2k_xyz_bt1886_encode(cB);
+
+    // Output as full-range 16-bit.
+    dstR[(size_t)y * pitchR + x] = (uint16_t)nvj2k_clamp_int((int)__float2int_rn(eR * 65535.0f), 0, 65535);
+    dstG[(size_t)y * pitchG + x] = (uint16_t)nvj2k_clamp_int((int)__float2int_rn(eG * 65535.0f), 0, 65535);
+    dstB[(size_t)y * pitchB + x] = (uint16_t)nvj2k_clamp_int((int)__float2int_rn(eB * 65535.0f), 0, 65535);
+}
+
 cudaError_t nvj2k_convert_to_surface_async(
     const NvJ2kPlane src[3],
     uint8_t *dst0,
@@ -216,9 +291,24 @@ cudaError_t nvj2k_convert_to_surface_async(
     int width,
     int height,
     RGY_CSP dst_csp,
+    bool xyz_input,
     cudaStream_t stream) {
     dim3 block(16, 16, 1);
     dim3 grid((width + block.x - 1) / block.x, (height + block.y - 1) / block.y, 1);
+    if (xyz_input) {
+        // DCP XYZ input must be gamma-decoded and matrixed to BT.709 RGB before packing.
+        // Only RGB_16 output is supported for XYZ input (12-bit XYZ would lose too much
+        // precision when re-encoded to 8-bit after gamma).
+        if (dst_csp != RGY_CSP_RGB_16 && dst_csp != RGY_CSP_GBR_16) {
+            return cudaErrorInvalidValue;
+        }
+        nvj2k_pack_xyz_to_bt709_kernel<<<grid, block, 0, stream>>>(
+            src[0], src[1], src[2],
+            (uint16_t *)dst0, (uint16_t *)dst1, (uint16_t *)dst2,
+            dst_pitch0 / 2, dst_pitch1 / 2, dst_pitch2 / 2,
+            width, height);
+        return cudaGetLastError();
+    }
     switch (dst_csp) {
     case RGY_CSP_NV12:
         nvj2k_pack_nv12_kernel<<<grid, block, 0, stream>>>(src[0], src[1], src[2], dst0, dst1, dst_pitch0, dst_pitch1, width, height);

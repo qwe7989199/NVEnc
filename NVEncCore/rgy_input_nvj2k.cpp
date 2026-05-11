@@ -62,7 +62,16 @@ struct nvjpeg2kImage_t {
 
 static const int NVJPEG2K_UINT16 = 1;
 
+static bool nvj2k_source_is_xyz(const AVCodecParameters *codecpar) {
+    const auto pixfmt = (AVPixelFormat)codecpar->format;
+    const auto pixdesc = av_pix_fmt_desc_get(pixfmt);
+    return pixdesc && (pixdesc->flags & AV_PIX_FMT_FLAG_XYZ);
+}
+
 static bool nvj2k_source_is_rgb(const AVCodecParameters *codecpar) {
+    if (nvj2k_source_is_xyz(codecpar)) {
+        return false;
+    }
     const auto pixfmt = (AVPixelFormat)codecpar->format;
     const auto pixdesc = av_pix_fmt_desc_get(pixfmt);
     return codecpar->color_space == AVCOL_SPC_RGB
@@ -179,7 +188,8 @@ RGYInputNvJ2k::RGYInputNvJ2k() :
     m_decodeState(nullptr),
     m_jpStream(nullptr),
     m_outputCsp(RGY_CSP_P010),
-    m_planes(new DevicePlane[3]) {
+    m_planes(new DevicePlane[3]),
+    m_sourceXyz(false) {
     m_readerName = _T("nvj2k");
 }
 
@@ -305,7 +315,9 @@ RGY_ERR RGYInputNvJ2k::Init(const TCHAR *strFileName, VideoInfo *inputInfo, cons
         AddMessage(RGY_LOG_ERROR, _T("nvj2k input requires a JPEG 2000 video stream.\n"));
         return RGY_ERR_INVALID_CODEC;
     }
-    const auto sourceRgb = nvj2k_source_is_rgb(m_Demux.video.stream->codecpar);
+    const auto sourceXyz = nvj2k_source_is_xyz(m_Demux.video.stream->codecpar);
+    const auto sourceRgb = sourceXyz ? true : nvj2k_source_is_rgb(m_Demux.video.stream->codecpar);
+    m_sourceXyz = sourceXyz;
     m_outputCsp = sourceRgb
         ? ((nvj2k_source_depth(m_Demux.video.stream->codecpar) > 8) ? RGY_CSP_RGB_16 : RGY_CSP_RGB)
         : (outputCspSupported(requestedCsp) ? requestedCsp : RGY_CSP_P010);
@@ -320,14 +332,22 @@ RGY_ERR RGYInputNvJ2k::Init(const TCHAR *strFileName, VideoInfo *inputInfo, cons
     m_inputVideoInfo.codec = RGY_CODEC_UNKNOWN;
     m_inputVideoInfo.csp = m_outputCsp;
     m_inputVideoInfo.bitdepth = RGY_CSP_BIT_DEPTH[m_outputCsp];
-    if (sourceRgb) {
+    if (sourceXyz) {
+        // Kernel converts XYZ(DCI) -> linear BT.709 -> BT.709 gamma-encoded RGB.
+        // Downstream sees ordinary BT.709 RGB input.
+        m_inputVideoInfo.vui.colorprim = RGY_PRIM_BT709;
+        m_inputVideoInfo.vui.transfer = RGY_TRANSFER_BT709;
+        m_inputVideoInfo.vui.matrix = RGY_MATRIX_BT709;
+        m_inputVideoInfo.vui.colorrange = RGY_COLORRANGE_FULL;
+        m_inputVideoInfo.vui.descriptpresent = 1;
+    } else if (sourceRgb) {
         m_inputVideoInfo.vui.matrix = nvj2k_rgb_to_yuv_matrix(m_inputVideoInfo.vui, m_inputVideoInfo.srcHeight);
         m_inputVideoInfo.vui.colorrange = RGY_COLORRANGE_LIMITED;
     }
     m_readerName = _T("nvj2k");
-    m_inputInfo = strsprintf(_T("nvj2k: nvJPEG2000 CUDA, %dx%d, %d/%d fps, %s"),
+    m_inputInfo = strsprintf(_T("nvj2k: nvJPEG2000 CUDA, %dx%d, %d/%d fps, %s%s"),
         m_inputVideoInfo.srcWidth, m_inputVideoInfo.srcHeight, m_inputVideoInfo.fpsN, m_inputVideoInfo.fpsD,
-        RGY_CSP_NAMES[m_outputCsp]);
+        RGY_CSP_NAMES[m_outputCsp], sourceXyz ? _T(" (XYZ DCI->BT.709)") : _T(""));
     *inputInfo = m_inputVideoInfo;
     return RGY_ERR_NONE;
 }
@@ -433,7 +453,7 @@ RGY_ERR RGYInputNvJ2k::decodePacketToSurface(const AVPacket *pkt, CUFrameBuf *su
         pitch2 = surface->pitch(RGY_PLANE_V);
     }
     auto cuerr = nvj2k_convert_to_surface_async(src, dst0, dst1, dst2, pitch0, pitch1, pitch2,
-        (int)info.image_width, (int)info.image_height, m_outputCsp, stream);
+        (int)info.image_width, (int)info.image_height, m_outputCsp, m_sourceXyz, stream);
     if (cuerr != cudaSuccess) {
         AddMessage(RGY_LOG_ERROR, _T("CUDA nvj2k surface conversion failed: %s.\n"), char_to_tstring(cudaGetErrorString(cuerr)).c_str());
         return err_to_rgy(cuerr);
