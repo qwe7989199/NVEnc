@@ -220,16 +220,19 @@ RGY_ERR RGYInputNvJ2k::initNvjpeg2k() {
     auto sts = m_nvj->CreateSimple(&m_handle);
     if (sts != NVJPEG2K_STATUS_SUCCESS) {
         AddMessage(RGY_LOG_ERROR, _T("nvjpeg2kCreateSimple failed: status=%d.\n"), sts);
+        closeNvjpeg2k();
         return RGY_ERR_UNKNOWN;
     }
     sts = m_nvj->DecodeStateCreate(m_handle, &m_decodeState);
     if (sts != NVJPEG2K_STATUS_SUCCESS) {
         AddMessage(RGY_LOG_ERROR, _T("nvjpeg2kDecodeStateCreate failed: status=%d.\n"), sts);
+        closeNvjpeg2k();
         return RGY_ERR_UNKNOWN;
     }
     sts = m_nvj->StreamCreate(&m_jpStream);
     if (sts != NVJPEG2K_STATUS_SUCCESS) {
         AddMessage(RGY_LOG_ERROR, _T("nvjpeg2kStreamCreate failed: status=%d.\n"), sts);
+        closeNvjpeg2k();
         return RGY_ERR_UNKNOWN;
     }
     return RGY_ERR_NONE;
@@ -431,9 +434,6 @@ RGY_ERR RGYInputNvJ2k::decodePacketToSurface(const AVPacket *pkt, CUFrameBuf *su
     }
     auto cuerr = nvj2k_convert_to_surface_async(src, dst0, dst1, dst2, pitch0, pitch1, pitch2,
         (int)info.image_width, (int)info.image_height, m_outputCsp, stream);
-    if (cuerr == cudaSuccess) {
-        cuerr = cudaStreamSynchronize(stream);
-    }
     if (cuerr != cudaSuccess) {
         AddMessage(RGY_LOG_ERROR, _T("CUDA nvj2k surface conversion failed: %s.\n"), char_to_tstring(cudaGetErrorString(cuerr)).c_str());
         return err_to_rgy(cuerr);

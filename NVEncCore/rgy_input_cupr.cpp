@@ -128,6 +128,10 @@ static RGY_ERR cupr_parse_prores_packet(RGYInputCupr::ProResFrameInfo& frame, co
         return RGY_ERR_INVALID_DATA_TYPE;
     }
     const int log2SliceMbWidth = pic[7] >> 4;
+    if (log2SliceMbWidth > 3) {
+        err = _T("invalid log2_slice_mb_width in ProRes picture header");
+        return RGY_ERR_INVALID_DATA_TYPE;
+    }
     const int mbWidth = (frame.width + 15) / 16;
     const size_t indexStart = picStart + picHeaderSize;
     if (indexStart + (size_t)numSlices * 2 > packetSize) {
@@ -168,6 +172,10 @@ static RGY_ERR cupr_parse_prores_packet(RGYInputCupr::ProResFrameInfo& frame, co
         const size_t outHeaderSize = 8;
         const size_t ySize = cupr_be16(src + 2);
         const size_t uSize = cupr_be16(src + 4);
+        if (srcHeaderSize + ySize + uSize > srcSize) {
+            err = _T("plane sizes overflow slice");
+            return RGY_ERR_INVALID_DATA_TYPE;
+        }
         const size_t vSize = srcHeaderSize > 7 ? cupr_be16(src + 6) : srcSize - srcHeaderSize - ySize - uSize;
         if (srcHeaderSize + ySize + uSize + vSize > srcSize) {
             err = _T("plane data overflows slice");
