@@ -1348,6 +1348,20 @@ __global__ void kernel_crop_rgb_yuv444(uint8_t *__restrict__ pDstY, uint8_t *__r
         kernel_crop_store4<TypeOut, TypeOut4, aligned>(ptrDstY, dstY);
         kernel_crop_store4<TypeOut, TypeOut4, aligned>(ptrDstU, dstU);
         kernel_crop_store4<TypeOut, TypeOut4, aligned>(ptrDstV, dstV);
+    } else if (x < dstWidth && y < dstHeight) {
+        // Tail path: per-pixel scalar write for the last 1..3 columns when dstWidth is not a multiple of 4.
+        #pragma unroll
+        for (int ix = 0; ix < PIX_PER_THREAD; ix++) {
+            const int sx = x + ix;
+            if (sx >= dstWidth) break;
+            const TypeIn r = ((const TypeIn *)(pSrcR + y * srcPitch))[sx];
+            const TypeIn g = ((const TypeIn *)(pSrcG + y * srcPitch))[sx];
+            const TypeIn b = ((const TypeIn *)(pSrcB + y * srcPitch))[sx];
+            float3 yuv = rgb_2_yuv<matrix>(make_float_rgb3<TypeIn, in_bit_depth>(r, g, b));
+            ((TypeOut *)(pDstY + y * dstPitch))[sx] = scaleYFloatToPix<TypeOut, out_bit_depth>(yuv.x);
+            ((TypeOut *)(pDstU + y * dstPitch))[sx] = scaleUVFloatToPix<TypeOut, out_bit_depth>(yuv.y);
+            ((TypeOut *)(pDstV + y * dstPitch))[sx] = scaleUVFloatToPix<TypeOut, out_bit_depth>(yuv.z);
+        }
     }
 }
 
@@ -1361,7 +1375,7 @@ void crop_rgb_yuv444(RGYFrameInfo *pOutputFrame, const RGYFrameInfo *pInputFrame
     auto planeOutputV = getPlane(pOutputFrame, RGY_PLANE_V);
 
     dim3 blockSize(32, 4);
-    dim3 gridSize(divCeil(pOutputFrame->width, blockSize.x * 4), divCeil(pOutputFrame->height, blockSize.y));
+    dim3 gridSize(divCeil((pOutputFrame->width + 3) / 4, blockSize.x), divCeil(pOutputFrame->height, blockSize.y));
     kernel_crop_rgb_yuv444<TypeOut, out_bit_depth, TypeIn, in_bit_depth, aligned, matrix><<<gridSize, blockSize, 0, stream>>>(
         planeOutputY.ptr[0], planeOutputU.ptr[0], planeOutputV.ptr[0], planeOutputY.pitch[0], planeOutputY.width, planeOutputY.height,
         planeInputR.ptr[0], planeInputG.ptr[0], planeInputB.ptr[0], planeInputR.pitch[0], pCrop->e.left, pCrop->e.up);
@@ -1483,6 +1497,20 @@ __global__ void kernel_crop_yuv444_rgb(
         kernel_crop_store4<TypeOut, TypeOut4, aligned>(ptrDstR, dstR);
         kernel_crop_store4<TypeOut, TypeOut4, aligned>(ptrDstG, dstG);
         kernel_crop_store4<TypeOut, TypeOut4, aligned>(ptrDstB, dstB);
+    } else if (x < dstWidth && y < dstHeight) {
+        // Tail path: per-pixel scalar write for the last 1..3 columns when dstWidth is not a multiple of 4.
+        #pragma unroll
+        for (int ix = 0; ix < PIX_PER_THREAD; ix++) {
+            const int sx = x + ix;
+            if (sx >= dstWidth) break;
+            const TypeIn srcY = ((const TypeIn *)(pSrcY + y * srcPitch))[sx];
+            const TypeIn srcU = ((const TypeIn *)(pSrcU + y * srcPitch))[sx];
+            const TypeIn srcV = ((const TypeIn *)(pSrcV + y * srcPitch))[sx];
+            float3 rgb = yuv_2_rgb<matrix>(make_float_yuv3<TypeIn, in_bit_depth>(srcY, srcU, srcV));
+            ((TypeOut *)(pDstR + y * dstPitch))[sx] = scaleRGBFloatToPix<TypeOut, out_bit_depth>(rgb.x);
+            ((TypeOut *)(pDstG + y * dstPitch))[sx] = scaleRGBFloatToPix<TypeOut, out_bit_depth>(rgb.y);
+            ((TypeOut *)(pDstB + y * dstPitch))[sx] = scaleRGBFloatToPix<TypeOut, out_bit_depth>(rgb.z);
+        }
     }
 }
 
@@ -1496,7 +1524,7 @@ void crop_yuv444_rgb(RGYFrameInfo *pOutputFrame, const RGYFrameInfo *pInputFrame
     auto planeOutputB = getPlane(pOutputFrame, RGY_PLANE_B);
 
     dim3 blockSize(32, 4);
-    dim3 gridSize(divCeil(pOutputFrame->width, blockSize.x * 4), divCeil(pOutputFrame->height, blockSize.y));
+    dim3 gridSize(divCeil((pOutputFrame->width + 3) / 4, blockSize.x), divCeil(pOutputFrame->height, blockSize.y));
     kernel_crop_yuv444_rgb<TypeOut, out_bit_depth, TypeIn, in_bit_depth, aligned, matrix> << <gridSize, blockSize, 0, stream >> > (
         planeOutputR.ptr[0], planeOutputG.ptr[0], planeOutputB.ptr[0], planeOutputR.pitch[0], planeOutputR.width, planeOutputR.height,
         planeInputY.ptr[0], planeInputU.ptr[0], planeInputV.ptr[0], planeInputY.pitch[0],
@@ -1713,7 +1741,8 @@ static __device__ float3 rgb4_2_yuv_clamped(const uint8_t *__restrict__ pSrc, co
     const int sx = min(max(x, 0), dstWidth - 1) + offsetX;
     const int sy = min(max(y, 0), dstHeight - 1) + offsetY;
     const TypeIn *ptr = (const TypeIn *)(pSrc + sy * srcPitch) + sx * 4;
-    return rgb4_2_yuv<TypeIn, in_bit_depth, matrix>(ptr);
+    float3 rgb = make_float_rgb3<TypeIn, in_bit_depth>(ptr[0], ptr[1], ptr[2]);
+    return rgb_2_yuv<matrix>(rgb);
 }
 
 template<typename TypeOut, int out_bit_depth, typename TypeIn, int in_bit_depth, CspMatrix matrix>
@@ -1938,7 +1967,7 @@ void crop_rgb_yv12(RGYFrameInfo *pOutputFrame, const RGYFrameInfo *pInputFrame, 
     auto planeOutputU = getPlane(pOutputFrame, RGY_PLANE_U);
     auto planeOutputV = getPlane(pOutputFrame, RGY_PLANE_V);
     dim3 blockSize(32, 4);
-    dim3 gridSize(divCeil(pOutputFrame->width, blockSize.x * 4), divCeil(pOutputFrame->height, blockSize.y * 2));
+    dim3 gridSize(divCeil((pOutputFrame->width + 3) / 4, blockSize.x), divCeil((pOutputFrame->height + 1) / 2, blockSize.y));
     kernel_crop_rgb_yv12<TypeOut, out_bit_depth, TypeIn, in_bit_depth, aligned, matrix><<<gridSize, blockSize, 0, stream >>>(
         planeOutputY.ptr[0], planeOutputU.ptr[0], planeOutputV.ptr[0], planeOutputY.pitch[0], planeOutputU.pitch[0], planeOutputY.width, planeOutputY.height,
         planeInputR.ptr[0], planeInputG.ptr[0], planeInputB.ptr[0], planeInputR.pitch[0], pCrop->e.left, pCrop->e.up);
@@ -2376,7 +2405,7 @@ void crop_rgb_nv12(RGYFrameInfo *pOutputFrame, const RGYFrameInfo *pInputFrame, 
     auto planeOutputY = getPlane(pOutputFrame, RGY_PLANE_Y);
     auto planeOutputC = getPlane(pOutputFrame, RGY_PLANE_U);
     dim3 blockSize(32, 4);
-    dim3 gridSize(divCeil(pOutputFrame->width, blockSize.x * 4), divCeil(pOutputFrame->height, blockSize.y * 2));
+    dim3 gridSize(divCeil((pOutputFrame->width + 3) / 4, blockSize.x), divCeil((pOutputFrame->height + 1) / 2, blockSize.y));
     kernel_crop_rgb_nv12<TypeOut, out_bit_depth, TypeIn, in_bit_depth, aligned, matrix><<<gridSize, blockSize, 0, stream>>>(
         planeOutputY.ptr[0], planeOutputC.ptr[0], planeOutputY.pitch[0], planeOutputY.width, planeOutputY.height,
         planeInputR.ptr[0], planeInputG.ptr[0], planeInputB.ptr[0], planeInputR.pitch[0], pCrop->e.left, pCrop->e.up);
@@ -2404,7 +2433,8 @@ void crop_rgb_nv12(RGYFrameInfo *pOutputFrame, const RGYFrameInfo *pInputFrame, 
 template<typename TypeOut, int out_bit_depth, typename TypeIn, int in_bit_depth, bool aligned>
 __global__ void kernel_crop_rgb_rgb(uint8_t *__restrict__ pDst, const int dstPitch, const int dstWidth, const int dstHeight,
     const uint8_t *__restrict__ pSrc, const int srcPitch, const int offsetX, const int offsetY) {
-    int x = (blockIdx.x * blockDim.x + threadIdx.x) * 4;
+    const int PIX_PER_THREAD = 4;
+    int x = (blockIdx.x * blockDim.x + threadIdx.x) * PIX_PER_THREAD;
     int y = blockIdx.y * blockDim.y + threadIdx.y;
     struct __align__(sizeof(TypeIn) * 4) TypeIn4 {
         TypeIn x, y, z, w;
@@ -2412,7 +2442,7 @@ __global__ void kernel_crop_rgb_rgb(uint8_t *__restrict__ pDst, const int dstPit
     struct __align__(sizeof(TypeOut) * 4) TypeOut4 {
         TypeOut x, y, z, w;
     };
-    if (x < dstWidth && y < dstHeight) {
+    if (x + PIX_PER_THREAD - 1 < dstWidth && y < dstHeight) {
         TypeIn4 src = kernel_crop_load4<TypeIn, TypeIn4, aligned>(pSrc + (y + offsetY) * srcPitch + (x + offsetX) * sizeof(TypeIn));
 
         TypeOut4 pix;
@@ -2423,6 +2453,15 @@ __global__ void kernel_crop_rgb_rgb(uint8_t *__restrict__ pDst, const int dstPit
 
         TypeOut4 *ptr_dst = (TypeOut4 *)(pDst + (y * dstPitch) + x * sizeof(TypeOut));
         kernel_crop_store4<TypeOut, TypeOut4, aligned>(ptr_dst, pix);
+    } else if (x < dstWidth && y < dstHeight) {
+        // Tail path: per-pixel scalar copy for the last 1..3 columns when dstWidth is not a multiple of 4.
+        #pragma unroll
+        for (int ix = 0; ix < PIX_PER_THREAD; ix++) {
+            const int sx = x + ix;
+            if (sx >= dstWidth) break;
+            const TypeIn src = ((const TypeIn *)(pSrc + (y + offsetY) * srcPitch))[sx + offsetX];
+            ((TypeOut *)(pDst + y * dstPitch))[sx] = conv_data_type<TypeOut, out_bit_depth, TypeIn, in_bit_depth, 0>(src);
+        }
     }
 }
 
@@ -2435,7 +2474,7 @@ void crop_rgb_rgb(RGYFrameInfo *pOutputFrame, const RGYFrameInfo *pInputFrame, c
     auto planeOutputG = getPlane(pOutputFrame, RGY_PLANE_G);
     auto planeOutputB = getPlane(pOutputFrame, RGY_PLANE_B);
     dim3 blockSize(32, 4);
-    dim3 gridSize(divCeil(pOutputFrame->width, blockSize.x * 4), divCeil(pOutputFrame->height, blockSize.y));
+    dim3 gridSize(divCeil((pOutputFrame->width + 3) / 4, blockSize.x), divCeil(pOutputFrame->height, blockSize.y));
     kernel_crop_rgb_rgb<TypeOut, out_bit_depth, TypeIn, in_bit_depth, aligned> << <gridSize, blockSize, 0, stream >> > (
         planeOutputR.ptr[0], planeOutputR.pitch[0], planeOutputR.width, planeOutputR.height,
         planeInputR.ptr[0], planeInputR.pitch[0], pCrop->e.left, pCrop->e.up);
