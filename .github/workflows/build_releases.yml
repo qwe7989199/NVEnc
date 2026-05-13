@@ -28,10 +28,10 @@ jobs:
         TAG=$(echo "${{ github.ref }}" | sed -e 's#refs/tags/##g' | tr -d '\r\n')
         VER=$(sed -n 's/^#define VER_STR_FILEVERSION[ \t]*"\([^"]*\)".*$/\1/p' NVEncCore/rgy_version.h | tr -d '\r\n')
         TAG_BASE="${TAG#v}"
-        if [ "$TAG_BASE" = "$VER" ] || [ "$TAG_BASE" = "${VER}-domo" ]; then
+        if [ "$TAG_BASE" = "$VER" ] || [ "$TAG_BASE" = "${VER}-domo" ] || [[ "$TAG_BASE" =~ ^${VER}-domo\.r[0-9]+$ ]]; then
           echo "Version OK: tag=${TAG}, header=${VER}"
         else
-          echo "ERROR: Tag version (${TAG}) does not match VER_STR_FILEVERSION (${VER}) or ${VER}-domo" >&2
+          echo "ERROR: Tag version (${TAG}) does not match VER_STR_FILEVERSION (${VER}), ${VER}-domo, or ${VER}-domo.rN" >&2
           exit 1
         fi
     - name: Set version name
@@ -185,7 +185,7 @@ jobs:
         if: startsWith(github.ref, 'refs/tags/')
         id: check_ver
         run: |
-          powershell "$tag = '${{ needs.get_version_name.outputs.version_name }}'; $ver = (Get-ItemProperty .\NVEncC_Release\NVEncC*.exe).VersionInfo.FileVersion; if ($tag -eq $ver -or $tag -eq ('v' + $ver) -or $tag -eq ($ver + '-domo') -or $tag -eq ('v' + $ver + '-domo')) { exit 0; } Write-Error ('FileVersion ' + $ver + ' does not match tag ' + $tag); exit 1;"
+          powershell "$tag = '${{ needs.get_version_name.outputs.version_name }}'; $ver = (Get-ItemProperty .\NVEncC_Release\NVEncC*.exe).VersionInfo.FileVersion; $escVer = [regex]::Escape($ver); if ($tag -eq $ver -or $tag -eq ('v' + $ver) -or $tag -eq ($ver + '-domo') -or $tag -eq ('v' + $ver + '-domo') -or $tag -match ('^v?' + $escVer + '-domo\.r[0-9]+$')) { exit 0; } Write-Error ('FileVersion ' + $ver + ' does not match tag ' + $tag); exit 1;"
 
       - name: Calc hash
         id: calc_hash
@@ -334,13 +334,13 @@ jobs:
         id: check_ver_win32
         if: startsWith(github.ref, 'refs/tags/') && matrix.platform == 'Win32'
         run: |
-          powershell "$tag = '${{ needs.get_version_name.outputs.version_name }}'; $ver = (Get-ItemProperty .\plugin_win32\NVEnc.auo).VersionInfo.FileVersion; if ($tag -eq $ver -or $tag -eq ('v' + $ver) -or $tag -eq ($ver + '-domo') -or $tag -eq ('v' + $ver + '-domo')) { exit 0; } Write-Error ('FileVersion ' + $ver + ' does not match tag ' + $tag); exit 1;"
+          powershell "$tag = '${{ needs.get_version_name.outputs.version_name }}'; $ver = (Get-ItemProperty .\plugin_win32\NVEnc.auo).VersionInfo.FileVersion; $escVer = [regex]::Escape($ver); if ($tag -eq $ver -or $tag -eq ('v' + $ver) -or $tag -eq ($ver + '-domo') -or $tag -eq ('v' + $ver + '-domo') -or $tag -match ('^v?' + $escVer + '-domo\.r[0-9]+$')) { exit 0; } Write-Error ('FileVersion ' + $ver + ' does not match tag ' + $tag); exit 1;"
 
       - name: Check Version x64
         id: check_ver_x64
         if: startsWith(github.ref, 'refs/tags/') && matrix.platform == 'x64'
         run: |
-          powershell "$tag = '${{ needs.get_version_name.outputs.version_name }}'; $ver = (Get-ItemProperty .\plugin_x64\NVEnc.auo2).VersionInfo.FileVersion; if ($tag -eq $ver -or $tag -eq ('v' + $ver) -or $tag -eq ($ver + '-domo') -or $tag -eq ('v' + $ver + '-domo')) { exit 0; } Write-Error ('FileVersion ' + $ver + ' does not match tag ' + $tag); exit 1;"
+          powershell "$tag = '${{ needs.get_version_name.outputs.version_name }}'; $ver = (Get-ItemProperty .\plugin_x64\NVEnc.auo2).VersionInfo.FileVersion; $escVer = [regex]::Escape($ver); if ($tag -eq $ver -or $tag -eq ('v' + $ver) -or $tag -eq ($ver + '-domo') -or $tag -eq ('v' + $ver + '-domo') -or $tag -match ('^v?' + $escVer + '-domo\.r[0-9]+$')) { exit 0; } Write-Error ('FileVersion ' + $ver + ' does not match tag ' + $tag); exit 1;"
 
       - name: Check dll Win32
         id: check_dll_win32

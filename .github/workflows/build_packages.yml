@@ -67,10 +67,10 @@ jobs:
           TAG=$(echo ${{ github.ref }} | sed -e "s#refs/tags/##g")
           VER=$(sed -n 's/^#define VER_STR_FILEVERSION[ \t]*"\([^"]*\)".*$/\1/p' NVEncCore/rgy_version.h | tr -d '\r\n')
           TAG_BASE="${TAG#v}"
-          if [ "$TAG_BASE" = "$VER" ] || [ "$TAG_BASE" = "${VER}-domo" ]; then
+          if [ "$TAG_BASE" = "$VER" ] || [ "$TAG_BASE" = "${VER}-domo" ] || [[ "$TAG_BASE" =~ ^${VER}-domo\.r[0-9]+$ ]]; then
             echo "Version OK: tag=${TAG}, header=${VER}"
           else
-            echo "ERROR: Tag version (${TAG}) does not match VER_STR_FILEVERSION (${VER}) or ${VER}-domo" >&2
+            echo "ERROR: Tag version (${TAG}) does not match VER_STR_FILEVERSION (${VER}), ${VER}-domo, or ${VER}-domo.rN" >&2
             exit 1
           fi
 
