@@ -39,6 +39,7 @@ cudaError_t cupr_decode_422_to_p210_async(
     int bit_depth,
     int num_slices,
     int strategy,
+    int chroma_format,
     cudaStream_t stream);
 
 cudaError_t cupr_decode_422_to_nv12_async(
@@ -56,6 +57,7 @@ cudaError_t cupr_decode_422_to_nv12_async(
     int bit_depth,
     int num_slices,
     int strategy,
+    int chroma_format,
     cudaStream_t stream);
 
 cudaError_t cupr_decode_422_to_p010_async(
@@ -73,6 +75,7 @@ cudaError_t cupr_decode_422_to_p010_async(
     int bit_depth,
     int num_slices,
     int strategy,
+    int chroma_format,
     cudaStream_t stream);
 
 cudaError_t cupr_benchmark_422_decode_async(
@@ -87,5 +90,56 @@ cudaError_t cupr_benchmark_422_decode_async(
     int num_slices,
     cudaStream_t stream,
     CuprDecodeBenchmarkResult *result);
+
+cudaError_t cupr_benchmark_444_decode_async(
+    const uint8_t *d_compressed,
+    const CuprSliceInfo *d_slices,
+    int16_t *d_y,
+    int16_t *d_cb,
+    int16_t *d_cr,
+    int width,
+    int height,
+    int bit_depth,
+    int num_slices,
+    cudaStream_t stream,
+    CuprDecodeBenchmarkResult *result);
+
+cudaError_t cupr_decode_444_to_nv12a_async(
+    const uint8_t *d_compressed,
+    const CuprSliceInfo *d_slices,
+    int16_t *d_y,
+    int16_t *d_cb,
+    int16_t *d_cr,
+    int16_t *d_alpha,
+    uint8_t *dst_y,
+    uint8_t *dst_uv,
+    uint8_t *dst_alpha,
+    int dst_pitch_y,
+    int dst_pitch_uv,
+    int width,
+    int height,
+    int bit_depth,
+    int num_slices,
+    int strategy,
+    cudaStream_t stream);
+
+cudaError_t cupr_decode_444_to_p010a_async(
+    const uint8_t *d_compressed,
+    const CuprSliceInfo *d_slices,
+    int16_t *d_y,
+    int16_t *d_cb,
+    int16_t *d_cr,
+    int16_t *d_alpha,
+    uint8_t *dst_y,
+    uint8_t *dst_uv,
+    uint8_t *dst_alpha,
+    int dst_pitch_y,
+    int dst_pitch_uv,
+    int width,
+    int height,
+    int bit_depth,
+    int num_slices,
+    int strategy,
+    cudaStream_t stream);
 
 #endif //__RGY_INPUT_CUPR_KERNELS_H__
