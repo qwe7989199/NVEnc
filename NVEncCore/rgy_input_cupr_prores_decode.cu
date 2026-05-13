@@ -59,8 +59,8 @@ __device__ __forceinline__ void br_init(BitReader *br, const uint8_t *data, int 
 }
 __device__ __forceinline__ void br_refill(BitReader *br) {
     if (br->cache_bits < 33 && br->byte_pos + 4 <= br->size) {
-        uint32_t word = *(const uint32_t *)(br->data + br->byte_pos);
-        word = __byte_perm(word, word, 0x0123);
+        const uint8_t *p = br->data + br->byte_pos;
+        uint32_t word = ((uint32_t)p[0] << 24) | ((uint32_t)p[1] << 16) | ((uint32_t)p[2] << 8) | (uint32_t)p[3];
         br->cache |= (uint64_t)word << (32 - br->cache_bits);
         br->cache_bits += 32;
         br->byte_pos += 4;
@@ -406,14 +406,16 @@ __device__ void idct_put_cq_shared(int16_t *blk, const int *qm, int qs, int bd) 
 }
 
 __device__ __forceinline__ void zero_blocks_i16(int16_t *blocks, int block_count) {
-    int4 *p = reinterpret_cast<int4 *>(blocks);
-    int4 z = make_int4(0, 0, 0, 0);
-    for (int i = 0; i < block_count * 8; i++) p[i] = z;
+    for (int i = 0; i < block_count * 64; i++) {
+        blocks[i] = 0;
+    }
 }
 
 __device__ __forceinline__ void store_block8x8_i16(int16_t *dst, int stride, const int16_t *blk) {
     for (int r = 0; r < 8; r++) {
-        *reinterpret_cast<int4 *>(dst + r * stride) = *reinterpret_cast<const int4 *>(blk + r * 8);
+        for (int c = 0; c < 8; c++) {
+            dst[r * stride + c] = blk[r * 8 + c];
+        }
     }
 }
 
@@ -445,12 +447,12 @@ extern "C" __global__ void prores_decode_slice(
     // Cb
     if(tid==0){for(int i=0;i<cb*64;i++)smem[i]=0; BitReader br; br_init(&br,sd+hs+yds,uds); decode_dc_coeffs(&br,smem,cb); decode_ac_coeffs(&br,smem,cb);}
     __syncthreads();
-    if(tid<cb){int16_t*b=smem+tid*64; idct_put_cq(b,c_chroma_qmat,qs,bits_per_component); int m,bx,by; if(is_444){m=tid/4;int s=tid%4;bx=(s>>1)*8;by=(s&1)*8;}else{m=tid/2;int s=tid%2;bx=0;by=s*8;} int ms=is_444?16:8; int16_t*d=out_cb+(si.mb_y*16+by)*stride_c+(si.mb_x+m)*ms+bx; for(int r=0;r<8;r++)for(int c=0;c<8;c++)d[r*stride_c+c]=b[r*8+c];}
+    if(tid<cb){int16_t*b=smem+tid*64; idct_put_cq(b,c_chroma_qmat,qs,bits_per_component); int m,bx,by; if(is_444){m=tid/4;int s=tid%4;bx=(s&1)*8;by=(s>>1)*8;}else{m=tid/2;int s=tid%2;bx=0;by=s*8;} int ms=is_444?16:8; int16_t*d=out_cb+(si.mb_y*16+by)*stride_c+(si.mb_x+m)*ms+bx; for(int r=0;r<8;r++)for(int c=0;c<8;c++)d[r*stride_c+c]=b[r*8+c];}
     __syncthreads();
     // Cr
     if(tid==0){for(int i=0;i<cb*64;i++)smem[i]=0; int cs=vds;if(cs<0)cs=0; BitReader br; br_init(&br,sd+hs+yds+uds,cs); decode_dc_coeffs(&br,smem,cb); decode_ac_coeffs(&br,smem,cb);}
     __syncthreads();
-    if(tid<cb){int16_t*b=smem+tid*64; idct_put_cq(b,c_chroma_qmat,qs,bits_per_component); int m,bx,by; if(is_444){m=tid/4;int s=tid%4;bx=(s>>1)*8;by=(s&1)*8;}else{m=tid/2;int s=tid%2;bx=0;by=s*8;} int ms=is_444?16:8; int16_t*d=out_cr+(si.mb_y*16+by)*stride_c+(si.mb_x+m)*ms+bx; for(int r=0;r<8;r++)for(int c=0;c<8;c++)d[r*stride_c+c]=b[r*8+c];}
+    if(tid<cb){int16_t*b=smem+tid*64; idct_put_cq(b,c_chroma_qmat,qs,bits_per_component); int m,bx,by; if(is_444){m=tid/4;int s=tid%4;bx=(s&1)*8;by=(s>>1)*8;}else{m=tid/2;int s=tid%2;bx=0;by=s*8;} int ms=is_444?16:8; int16_t*d=out_cr+(si.mb_y*16+by)*stride_c+(si.mb_x+m)*ms+bx; for(int r=0;r<8;r++)for(int c=0;c<8;c++)d[r*stride_c+c]=b[r*8+c];}
 }
 
 // === Lane-parallel decode: each thread decodes one slice independently ===
@@ -487,7 +489,7 @@ extern "C" __global__ void __launch_bounds__(32, 1) pr_decode_luma(
     int yb = mbc * 4; // Y blocks per slice (max 32 for 8 MBs)
 
     // Local coefficient storage (in registers/local memory)
-    int16_t blocks[32 * 64]; // max 32 blocks * 64 coeffs
+    __align__(16) int16_t blocks[32 * 64]; // max 32 blocks * 64 coeffs
     zero_blocks_i16(blocks, yb);
 
     BitReader br;
@@ -554,7 +556,7 @@ extern "C" __global__ void __launch_bounds__(32, 1) pr_decode_chroma422(
         plane_size = vds > 0 ? vds : 0;
     }
 
-    int16_t blocks[16 * 64]; // max 16 chroma blocks (8 MBs * 2)
+    __align__(16) int16_t blocks[16 * 64]; // max 16 chroma blocks (8 MBs * 2)
     zero_blocks_i16(blocks, cb);
 
     BitReader br;
@@ -606,7 +608,7 @@ extern "C" __global__ void __launch_bounds__(32, 1) pr_decode_chroma422_both(
     int vds = (hs > 7) ? ((sd[6]<<8)|sd[7]) : ((int)si.size - yds - uds - hs);
     int cb = si.mb_count * 2;
 
-    int16_t blocks[16 * 64];
+    __align__(16) int16_t blocks[16 * 64];
 
     for (int plane = 0; plane < 2; plane++) {
         const uint8_t *plane_data = plane == 0 ? sd + hs + yds : sd + hs + yds + uds;
@@ -663,7 +665,7 @@ extern "C" __global__ void __launch_bounds__(32, 1) NAME( \
     int yds = (sd[2]<<8)|sd[3]; \
     int mbc = si.mb_count; \
     int yb = mbc * 4; \
-    int16_t blocks[32 * 64]; \
+    __align__(16) int16_t blocks[32 * 64]; \
     zero_blocks_i16(blocks, yb); \
     BitReader br; \
     br_init(&br, sd + hs, yds); \
@@ -712,7 +714,7 @@ extern "C" __global__ void __launch_bounds__(32, 1) NAME( \
     int uds = (sd[4]<<8)|sd[5]; \
     int vds = (hs > 7) ? ((sd[6]<<8)|sd[7]) : ((int)si.size - yds - uds - hs); \
     int cb = si.mb_count * 2; \
-    int16_t blocks[16 * 64]; \
+    __align__(16) int16_t blocks[16 * 64]; \
     for (int plane = 0; plane < 2; plane++) { \
         const uint8_t *plane_data = plane == 0 ? sd + hs + yds : sd + hs + yds + uds; \
         int plane_size = plane == 0 ? uds : (vds > 0 ? vds : 0); \
@@ -743,7 +745,7 @@ DEFINE_PR_DECODE_LUMA_LANES(pr_decode_luma_lanes8, 8)
 DEFINE_PR_DECODE_CHROMA422_BOTH_LANES(pr_decode_chroma422_both_lanes16, 16)
 DEFINE_PR_DECODE_CHROMA422_BOTH_LANES(pr_decode_chroma422_both_lanes8, 8)
 
-// 444 chroma lane-parallel: 4 blocks/MB, column-major placement (bx=(s>>1)*8, by=(s&1)*8)
+// 444 chroma lane-parallel: 4 blocks/MB, same row-major placement as luma/alpha.
 #define DEFINE_PR_DECODE_CHROMA444_BOTH_LANES(NAME, LANES) \
 extern "C" __global__ void __launch_bounds__(32, 1) NAME( \
     const uint8_t *compressed, const SliceInfo *slice_info, \
@@ -772,7 +774,7 @@ extern "C" __global__ void __launch_bounds__(32, 1) NAME( \
     int uds = (sd[4]<<8)|sd[5]; \
     int vds = (hs > 7) ? ((sd[6]<<8)|sd[7]) : ((int)si.size - yds - uds - hs); \
     int cb = si.mb_count * 4; \
-    int16_t blocks[32 * 64]; \
+    __align__(16) int16_t blocks[32 * 64]; \
     for (int plane = 0; plane < 2; plane++) { \
         const uint8_t *plane_data = plane == 0 ? sd + hs + yds : sd + hs + yds + uds; \
         int plane_size = plane == 0 ? uds : (vds > 0 ? vds : 0); \
@@ -791,7 +793,7 @@ extern "C" __global__ void __launch_bounds__(32, 1) NAME( \
             int16_t *blk = blocks + b * 64; \
             idct_put_cq_shared(blk, s_qmat, qs, bits_per_component); \
             int mb = b / 4, sub = b % 4; \
-            int bx = (sub >> 1) * 8, by = (sub & 1) * 8; \
+            int bx = (sub & 1) * 8, by = (sub >> 1) * 8; \
             int16_t *dst = out_plane + (si.mb_y * 16 + by) * stride_c + (si.mb_x + mb) * 16 + bx; \
             store_block8x8_i16(dst, stride_c, blk); \
         } \
@@ -801,55 +803,79 @@ extern "C" __global__ void __launch_bounds__(32, 1) NAME( \
 DEFINE_PR_DECODE_CHROMA444_BOTH_LANES(pr_decode_chroma444_both_lanes16, 16)
 DEFINE_PR_DECODE_CHROMA444_BOTH_LANES(pr_decode_chroma444_both_lanes8, 8)
 
-// 444 alpha lane-parallel: 4 blocks/MB, row-major placement (same as Y: bx=(s&1)*8, by=(s>>1)*8)
-// Uses luma qmat. Data offset: after Y/Cb/Cr in slice.
+__device__ __forceinline__ int cupr_scale_alpha(int alpha, int alpha_bits, int bit_depth) {
+    const int alpha_max = (1 << alpha_bits) - 1;
+    alpha = max(0, min(alpha_max, alpha));
+    if (alpha_bits > bit_depth) {
+        return alpha >> (alpha_bits - bit_depth);
+    } else if (alpha_bits < bit_depth) {
+        const int shift = bit_depth - alpha_bits;
+        return (alpha << shift) | (alpha >> max(1, alpha_bits - shift));
+    }
+    return alpha;
+}
+
+__device__ __forceinline__ void store_alpha_sample_i16(
+    int16_t *out_alpha, int stride_a, int width, int height,
+    const SliceInfo& si, int sample_idx, int value) {
+    const int slice_width = si.mb_count * 16;
+    const int x = si.mb_x * 16 + (sample_idx % slice_width);
+    const int y = si.mb_y * 16 + (sample_idx / slice_width);
+    if (x < width && y < height) {
+        out_alpha[y * stride_a + x] = (int16_t)value;
+    }
+}
+
+// 4444 alpha is delta/RLE packed, not DCT-coded like Y/Cb/Cr.
 #define DEFINE_PR_DECODE_ALPHA444_LANES(NAME, LANES) \
 extern "C" __global__ void __launch_bounds__(32, 1) NAME( \
     const uint8_t *compressed, const SliceInfo *slice_info, \
     int16_t *out_alpha, int stride_a, \
-    int bits_per_component, int num_slices \
+    int width, int height, int bits_per_component, int alpha_info, int num_slices \
 ) { \
-    __shared__ int s_qmat[64]; \
-    __shared__ int s_scan_lane[64 * 32]; \
-    __shared__ int s_dc_cb[128]; \
-    __shared__ int s_run_cb[512]; \
-    __shared__ int s_level_cb[320]; \
     int tid = threadIdx.x; \
-    for (int i = 0; i < 64; i++) s_scan_lane[i * 32 + tid] = c_scan[i]; \
-    s_qmat[tid] = c_luma_qmat[tid]; \
-    s_qmat[tid + 32] = c_luma_qmat[tid + 32]; \
-    init_entropy_luts(tid, s_dc_cb, s_run_cb, s_level_cb); \
-    __syncthreads(); \
     if (tid >= LANES) return; \
     int work_idx = blockIdx.x * LANES + tid; \
     if (work_idx >= num_slices) return; \
     SliceInfo si = slice_info[work_idx]; \
     const uint8_t *sd = compressed + si.offset; \
     int hs = sd[0] >> 3; \
-    int qs; { int rq=sd[1]; if(rq<1)rq=1; if(rq>224)rq=224; qs=rq>128?(rq-96)<<2:rq; } \
     int yds = (sd[2]<<8)|sd[3]; \
     int uds = (sd[4]<<8)|sd[5]; \
     int vds = (hs > 7) ? ((sd[6]<<8)|sd[7]) : ((int)si.size - yds - uds - hs); \
     int ads = (hs > 9) ? ((sd[8]<<8)|sd[9]) : 0; \
-    int ab = si.mb_count * 4; \
-    int16_t blocks[32 * 64]; \
-    zero_blocks_i16(blocks, ab); \
+    const int alpha_bits = (alpha_info == 2) ? 16 : 8; \
+    const int alpha_mask = (1 << alpha_bits) - 1; \
+    const int sample_count = si.mb_count * 16 * 16; \
+    int sample_idx = 0; \
+    int alpha_val = alpha_mask; \
     BitReader br; \
     br_init(&br, sd + hs + yds + uds + vds, ads); \
-    if (si.mb_count == 8) { \
-        decode_dc_coeffs_lut_fixed<32>(&br, blocks, s_dc_cb, tid); \
-        decode_ac_coeffs_lut_fixed<5, 31, 2048>(&br, blocks, s_scan_lane, s_run_cb, s_level_cb, tid); \
-    } else { \
-        decode_dc_coeffs_lut(&br, blocks, ab, s_dc_cb, tid); \
-        decode_ac_coeffs_lut(&br, blocks, ab, s_scan_lane, s_run_cb, s_level_cb, tid); \
-    } \
-    for (int b = 0; b < ab; b++) { \
-        int16_t *blk = blocks + b * 64; \
-        idct_put_cq_shared(blk, s_qmat, qs, bits_per_component); \
-        int mb = b / 4, sub = b % 4; \
-        int bx = (sub & 1) * 8, by = (sub >> 1) * 8; \
-        int16_t *dst = out_alpha + (si.mb_y * 16 + by) * stride_a + (si.mb_x + mb) * 16 + bx; \
-        store_block8x8_i16(dst, stride_a, blk); \
+    while (sample_idx < sample_count && br_bits_left(&br) > 0) { \
+        for (;;) { \
+            if (br_bits_left(&br) <= 0) break; \
+            int diff; \
+            if (br_read1(&br)) { \
+                diff = br_read(&br, alpha_bits); \
+            } else { \
+                int code = br_read(&br, alpha_bits == 16 ? 7 : 4); \
+                const int sign = code & 1; \
+                diff = (code + 2) >> 1; \
+                if (sign) diff = -diff; \
+            } \
+            alpha_val = (alpha_val + diff) & alpha_mask; \
+            store_alpha_sample_i16(out_alpha, stride_a, width, height, si, sample_idx++, cupr_scale_alpha(alpha_val, alpha_bits, bits_per_component)); \
+            if (sample_idx >= sample_count || br_bits_left(&br) <= 0 || !br_read1(&br)) break; \
+        } \
+        if (sample_idx >= sample_count || br_bits_left(&br) <= 0) break; \
+        int run = br_read(&br, 4); \
+        if (run == 0) { \
+            run = br_read(&br, 11); \
+        } \
+        const int value = cupr_scale_alpha(alpha_val, alpha_bits, bits_per_component); \
+        for (int i = 0; i < run && sample_idx < sample_count; i++) { \
+            store_alpha_sample_i16(out_alpha, stride_a, width, height, si, sample_idx++, value); \
+        } \
     } \
 }
 
@@ -1003,7 +1029,7 @@ extern "C" __global__ void __launch_bounds__(32, 1) pr_decode_422_fused(
     int yb = mbc * 4;
     int cb = mbc * 2;
 
-    int16_t blocks[32 * 64];
+    __align__(16) int16_t blocks[32 * 64];
 
     zero_blocks_i16(blocks, yb);
     BitReader br_y;

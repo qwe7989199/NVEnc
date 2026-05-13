@@ -53,6 +53,7 @@ struct RGYInputCupr::ProResFrameInfo {
     int bitDepth = 10;
     int chromaFormat = 2; // 2 = 4:2:2, 3 = 4:4:4
     bool hasAlpha = false;
+    int alphaInfo = 0; // 1 = 8-bit alpha, 2 = 16-bit alpha
     uint8_t lumaQmat[64] = {};
     uint8_t chromaQmat[64] = {};
     std::vector<uint8_t> compressed;
@@ -85,7 +86,12 @@ static RGY_ERR cupr_parse_prores_packet(RGYInputCupr::ProResFrameInfo& frame, co
         return RGY_ERR_UNSUPPORTED;
     }
     frame.chromaFormat = chroma;
-    frame.hasAlpha = (chroma == 3) && ((hdr[12] >> 4) & 1);
+    frame.alphaInfo = hdrSize > 17 ? (hdr[17] & 0x0f) : 0;
+    if (frame.alphaInfo > 2) {
+        err = _T("invalid ProRes alpha mode");
+        return RGY_ERR_INVALID_DATA_TYPE;
+    }
+    frame.hasAlpha = (chroma == 3) && frame.alphaInfo != 0;
     const int bitDepthIndex = (hdr[13] >> 6) & 3;
     frame.bitDepth = bitDepthIndex == 0 ? 10 : bitDepthIndex == 1 ? 12 : 0;
     if (chroma == 2 && frame.bitDepth != 10) {
@@ -358,6 +364,15 @@ RGY_ERR RGYInputCupr::Init(const TCHAR *strFileName, VideoInfo *inputInfo, const
 
     CloseVideoDecoder();
     m_Demux.video.HWDecodeDeviceId.clear();
+
+    // When RGY_CSP_NA is requested (alpha output mode), auto-select NV12A if source has alpha.
+    if (requestedCsp == RGY_CSP_NA) {
+        const AVPixFmtDescriptor *desc = av_pix_fmt_desc_get((AVPixelFormat)m_Demux.video.stream->codecpar->format);
+        if (desc && (desc->flags & AV_PIX_FMT_FLAG_ALPHA)) {
+            m_outputCsp = RGY_CSP_NV12A; // alpha encoding only supports 8-bit YUV420
+        }
+    }
+
     m_inputVideoInfo = avInitInfo;
     m_inputVideoInfo.type = RGY_INPUT_FMT_CUPR;
     m_inputVideoInfo.codec = RGY_CODEC_UNKNOWN;
@@ -479,7 +494,7 @@ RGY_ERR RGYInputCupr::decodePacketToSurface(const AVPacket *pkt, CUFrameBuf *sur
     if ((sts = ensureDeviceBuffer((uint8_t **)&m_dY, &m_dYCapacity, ySamples * sizeof(int16_t))) != RGY_ERR_NONE) return sts;
     if ((sts = ensureDeviceBuffer((uint8_t **)&m_dCb, &m_dCbCapacity, cSamples * sizeof(int16_t))) != RGY_ERR_NONE) return sts;
     if ((sts = ensureDeviceBuffer((uint8_t **)&m_dCr, &m_dCrCapacity, cSamples * sizeof(int16_t))) != RGY_ERR_NONE) return sts;
-    if (frame.hasAlpha) {
+    if (frame.hasAlpha || m_outputCsp == RGY_CSP_NV12A || m_outputCsp == RGY_CSP_P010A) {
         if ((sts = ensureDeviceBuffer((uint8_t **)&m_dAlpha, &m_dAlphaCapacity, ySamples * sizeof(int16_t))) != RGY_ERR_NONE) return sts;
     }
 
@@ -496,7 +511,7 @@ RGY_ERR RGYInputCupr::decodePacketToSurface(const AVPacket *pkt, CUFrameBuf *sur
     if (cuerr == cudaSuccess) {
         cuerr = cudaMemsetAsync(m_dCr, 0, cSamples * sizeof(int16_t), stream);
     }
-    if (cuerr == cudaSuccess && frame.hasAlpha && m_dAlpha) {
+    if (cuerr == cudaSuccess && m_dAlpha && (m_outputCsp == RGY_CSP_NV12A || m_outputCsp == RGY_CSP_P010A)) {
         cuerr = cudaMemsetAsync(m_dAlpha, 0, ySamples * sizeof(int16_t), stream);
     }
     if (cuerr == cudaSuccess) {
@@ -525,13 +540,13 @@ RGY_ERR RGYInputCupr::decodePacketToSurface(const AVPacket *pkt, CUFrameBuf *sur
                 m_dCompressed, reinterpret_cast<const CuprSliceInfo *>(m_dSlices), m_dY, m_dCb, m_dCr, m_dAlpha,
                 surface->ptrY(), surface->ptrUV(), surface->ptrPlane(RGY_PLANE_A),
                 surface->pitch(RGY_PLANE_Y), surface->pitch(RGY_PLANE_C),
-                frame.width, frame.height, frame.bitDepth, (int)frame.slices.size(), (int)m_selectedStrategy, stream);
+                frame.width, frame.height, frame.bitDepth, frame.alphaInfo, (int)frame.slices.size(), (int)m_selectedStrategy, stream);
         } else if (m_outputCsp == RGY_CSP_P010A) {
             cuerr = cupr_decode_444_to_p010a_async(
                 m_dCompressed, reinterpret_cast<const CuprSliceInfo *>(m_dSlices), m_dY, m_dCb, m_dCr, m_dAlpha,
                 surface->ptrY(), surface->ptrUV(), surface->ptrPlane(RGY_PLANE_A),
                 surface->pitch(RGY_PLANE_Y), surface->pitch(RGY_PLANE_C),
-                frame.width, frame.height, frame.bitDepth, (int)frame.slices.size(), (int)m_selectedStrategy, stream);
+                frame.width, frame.height, frame.bitDepth, frame.alphaInfo, (int)frame.slices.size(), (int)m_selectedStrategy, stream);
         } else {
             cuerr = cupr_decode_422_to_p210_async(
                 m_dCompressed, reinterpret_cast<const CuprSliceInfo *>(m_dSlices), m_dY, m_dCb, m_dCr,
