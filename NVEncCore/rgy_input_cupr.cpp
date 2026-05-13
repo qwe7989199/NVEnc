@@ -494,7 +494,7 @@ RGY_ERR RGYInputCupr::decodePacketToSurface(const AVPacket *pkt, CUFrameBuf *sur
     if ((sts = ensureDeviceBuffer((uint8_t **)&m_dY, &m_dYCapacity, ySamples * sizeof(int16_t))) != RGY_ERR_NONE) return sts;
     if ((sts = ensureDeviceBuffer((uint8_t **)&m_dCb, &m_dCbCapacity, cSamples * sizeof(int16_t))) != RGY_ERR_NONE) return sts;
     if ((sts = ensureDeviceBuffer((uint8_t **)&m_dCr, &m_dCrCapacity, cSamples * sizeof(int16_t))) != RGY_ERR_NONE) return sts;
-    if (frame.hasAlpha || m_outputCsp == RGY_CSP_NV12A || m_outputCsp == RGY_CSP_P010A) {
+    if (m_outputCsp == RGY_CSP_NV12A || m_outputCsp == RGY_CSP_P010A) {
         if ((sts = ensureDeviceBuffer((uint8_t **)&m_dAlpha, &m_dAlphaCapacity, ySamples * sizeof(int16_t))) != RGY_ERR_NONE) return sts;
     }
 

@@ -419,6 +419,12 @@ __device__ __forceinline__ void store_block8x8_i16(int16_t *dst, int stride, con
     }
 }
 
+__device__ __forceinline__ void prores_chroma444_block_pos(int sub, int *bx, int *by) {
+    // ProRes 4:4:4 chroma blocks are coded column-major inside a 16x16 macroblock.
+    *bx = (sub >> 1) * 8;
+    *by = (sub & 1) * 8;
+}
+
 // --- Main kernel ---
 extern "C" __global__ void prores_decode_slice(
     const uint8_t *compressed, const SliceInfo *slice_info,
@@ -447,12 +453,12 @@ extern "C" __global__ void prores_decode_slice(
     // Cb
     if(tid==0){for(int i=0;i<cb*64;i++)smem[i]=0; BitReader br; br_init(&br,sd+hs+yds,uds); decode_dc_coeffs(&br,smem,cb); decode_ac_coeffs(&br,smem,cb);}
     __syncthreads();
-    if(tid<cb){int16_t*b=smem+tid*64; idct_put_cq(b,c_chroma_qmat,qs,bits_per_component); int m,bx,by; if(is_444){m=tid/4;int s=tid%4;bx=(s&1)*8;by=(s>>1)*8;}else{m=tid/2;int s=tid%2;bx=0;by=s*8;} int ms=is_444?16:8; int16_t*d=out_cb+(si.mb_y*16+by)*stride_c+(si.mb_x+m)*ms+bx; for(int r=0;r<8;r++)for(int c=0;c<8;c++)d[r*stride_c+c]=b[r*8+c];}
+    if(tid<cb){int16_t*b=smem+tid*64; idct_put_cq(b,c_chroma_qmat,qs,bits_per_component); int m,bx,by; if(is_444){m=tid/4;prores_chroma444_block_pos(tid%4,&bx,&by);}else{m=tid/2;int s=tid%2;bx=0;by=s*8;} int ms=is_444?16:8; int16_t*d=out_cb+(si.mb_y*16+by)*stride_c+(si.mb_x+m)*ms+bx; for(int r=0;r<8;r++)for(int c=0;c<8;c++)d[r*stride_c+c]=b[r*8+c];}
     __syncthreads();
     // Cr
     if(tid==0){for(int i=0;i<cb*64;i++)smem[i]=0; int cs=vds;if(cs<0)cs=0; BitReader br; br_init(&br,sd+hs+yds+uds,cs); decode_dc_coeffs(&br,smem,cb); decode_ac_coeffs(&br,smem,cb);}
     __syncthreads();
-    if(tid<cb){int16_t*b=smem+tid*64; idct_put_cq(b,c_chroma_qmat,qs,bits_per_component); int m,bx,by; if(is_444){m=tid/4;int s=tid%4;bx=(s&1)*8;by=(s>>1)*8;}else{m=tid/2;int s=tid%2;bx=0;by=s*8;} int ms=is_444?16:8; int16_t*d=out_cr+(si.mb_y*16+by)*stride_c+(si.mb_x+m)*ms+bx; for(int r=0;r<8;r++)for(int c=0;c<8;c++)d[r*stride_c+c]=b[r*8+c];}
+    if(tid<cb){int16_t*b=smem+tid*64; idct_put_cq(b,c_chroma_qmat,qs,bits_per_component); int m,bx,by; if(is_444){m=tid/4;prores_chroma444_block_pos(tid%4,&bx,&by);}else{m=tid/2;int s=tid%2;bx=0;by=s*8;} int ms=is_444?16:8; int16_t*d=out_cr+(si.mb_y*16+by)*stride_c+(si.mb_x+m)*ms+bx; for(int r=0;r<8;r++)for(int c=0;c<8;c++)d[r*stride_c+c]=b[r*8+c];}
 }
 
 // === Lane-parallel decode: each thread decodes one slice independently ===
@@ -793,7 +799,8 @@ extern "C" __global__ void __launch_bounds__(32, 1) NAME( \
             int16_t *blk = blocks + b * 64; \
             idct_put_cq_shared(blk, s_qmat, qs, bits_per_component); \
             int mb = b / 4, sub = b % 4; \
-            int bx = (sub & 1) * 8, by = (sub >> 1) * 8; \
+            int bx, by; \
+            prores_chroma444_block_pos(sub, &bx, &by); \
             int16_t *dst = out_plane + (si.mb_y * 16 + by) * stride_c + (si.mb_x + mb) * 16 + bx; \
             store_block8x8_i16(dst, stride_c, blk); \
         } \
