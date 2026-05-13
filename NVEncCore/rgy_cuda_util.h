@@ -232,6 +232,14 @@ static RGY_ERR copyFrame(RGYFrameInfo *dst, const RGYFrameInfo *src) {
             return ret;
         }
     }
+    if (rgy_csp_has_alpha(dst->csp) && rgy_csp_has_alpha(src->csp)) {
+        const auto srcPlane = getPlane(src, RGY_PLANE_A);
+        auto dstPlane = getPlane(dst, RGY_PLANE_A);
+        auto ret = copyPlane(&dstPlane, &srcPlane);
+        if (ret != RGY_ERR_NONE) {
+            return ret;
+        }
+    }
     return RGY_ERR_NONE;
 }
 
@@ -239,6 +247,14 @@ static RGY_ERR copyFrameAsync(RGYFrameInfo *dst, const RGYFrameInfo *src, cudaSt
     for (int i = 0; i < RGY_CSP_PLANES[dst->csp]; i++) {
         const auto srcPlane = getPlane(src, (RGY_PLANE)i);
         auto dstPlane = getPlane(dst, (RGY_PLANE)i);
+        auto ret = copyPlaneAsync(&dstPlane, &srcPlane, stream);
+        if (ret != RGY_ERR_NONE) {
+            return ret;
+        }
+    }
+    if (rgy_csp_has_alpha(dst->csp) && rgy_csp_has_alpha(src->csp)) {
+        const auto srcPlane = getPlane(src, RGY_PLANE_A);
+        auto dstPlane = getPlane(dst, RGY_PLANE_A);
         auto ret = copyPlaneAsync(&dstPlane, &srcPlane, stream);
         if (ret != RGY_ERR_NONE) {
             return ret;
@@ -256,6 +272,14 @@ static RGY_ERR copyFrameField(RGYFrameInfo *dst, const RGYFrameInfo *src, const 
             return ret;
         }
     }
+    if (rgy_csp_has_alpha(dst->csp) && rgy_csp_has_alpha(src->csp)) {
+        const auto srcPlane = getPlane(src, RGY_PLANE_A);
+        auto dstPlane = getPlane(dst, RGY_PLANE_A);
+        auto ret = copyPlaneField(&dstPlane, &srcPlane, dstTopField, srcTopField);
+        if (ret != RGY_ERR_NONE) {
+            return ret;
+        }
+    }
     return RGY_ERR_NONE;
 }
 
@@ -263,6 +287,14 @@ static RGY_ERR copyFrameFieldAsync(RGYFrameInfo *dst, const RGYFrameInfo *src, c
     for (int i = 0; i < RGY_CSP_PLANES[dst->csp]; i++) {
         const auto srcPlane = getPlane(src, (RGY_PLANE)i);
         auto dstPlane = getPlane(dst, (RGY_PLANE)i);
+        auto ret = copyPlaneFieldAsync(&dstPlane, &srcPlane, dstTopField, srcTopField, stream);
+        if (ret != RGY_ERR_NONE) {
+            return ret;
+        }
+    }
+    if (rgy_csp_has_alpha(dst->csp) && rgy_csp_has_alpha(src->csp)) {
+        const auto srcPlane = getPlane(src, RGY_PLANE_A);
+        auto dstPlane = getPlane(dst, RGY_PLANE_A);
         auto ret = copyPlaneFieldAsync(&dstPlane, &srcPlane, dstTopField, srcTopField, stream);
         if (ret != RGY_ERR_NONE) {
             return ret;
@@ -391,6 +423,9 @@ protected:
             int totalHeight = 0;
             for (int i = 0; i < RGY_CSP_PLANES[frame.csp]; i++) {
                 totalHeight += getPlane(&frame, (RGY_PLANE)i).height;
+            }
+            if (frame.csp == RGY_CSP_NV12A || frame.csp == RGY_CSP_P010A) {
+                totalHeight += frame.height; // alpha plane not counted in RGY_CSP_PLANES
             }
             const int widthByte = frame.width * pixsize;
             size_t memPitch = ALIGN(widthByte, (align) ? align : 128); //このアライメントはRGY_MEM_TYPE_CPUのとき、読み込み時の色変換の並列化のために必要
