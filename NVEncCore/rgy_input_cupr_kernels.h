@@ -119,6 +119,7 @@ cudaError_t cupr_decode_444_to_nv12a_async(
     int width,
     int height,
     int bit_depth,
+    int alpha_info,
     int num_slices,
     int strategy,
     cudaStream_t stream);
@@ -138,6 +139,7 @@ cudaError_t cupr_decode_444_to_p010a_async(
     int width,
     int height,
     int bit_depth,
+    int alpha_info,
     int num_slices,
     int strategy,
     cudaStream_t stream);

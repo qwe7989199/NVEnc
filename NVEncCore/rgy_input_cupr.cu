@@ -292,12 +292,13 @@ static cudaError_t cupr_launch_decode_422(
             return cudaGetLastError();
         }
         if (strategy == CUPR_STRATEGY_DUAL) {
-            dim3 grid((num_slices + 31) / 32, 1, 1);
-            pr_decode_luma<<<grid, block, 0, stream>>>(
+            dim3 gridLuma((num_slices + 31) / 32, 1, 1);
+            pr_decode_luma<<<gridLuma, block, 0, stream>>>(
                 d_compressed, slices, d_y, stride_y, bit_depth, num_slices);
             auto err = cudaGetLastError();
             if (err != cudaSuccess) return err;
-            pr_decode_chroma444_both_lanes8<<<grid, block, 0, stream>>>(
+            dim3 gridChroma((num_slices + 7) / 8, 1, 1);
+            pr_decode_chroma444_both_lanes8<<<gridChroma, block, 0, stream>>>(
                 d_compressed, slices, d_cb, d_cr, stride_c, bit_depth, num_slices);
             return cudaGetLastError();
         }
@@ -554,7 +555,9 @@ static cudaError_t cupr_launch_decode_alpha444(
     const CuprSliceInfo *d_slices,
     int16_t *d_alpha,
     int width,
+    int height,
     int bit_depth,
+    int alpha_info,
     int num_slices,
     int strategy,
     cudaStream_t stream) {
@@ -564,11 +567,11 @@ static cudaError_t cupr_launch_decode_alpha444(
     if (strategy == CUPR_STRATEGY_LANE16) {
         dim3 grid((num_slices + 15) / 16, 1, 1);
         pr_decode_alpha444_lanes16<<<grid, block, 0, stream>>>(
-            d_compressed, slices, d_alpha, stride_a, bit_depth, num_slices);
+            d_compressed, slices, d_alpha, stride_a, width, height, bit_depth, alpha_info, num_slices);
     } else {
         dim3 grid((num_slices + 7) / 8, 1, 1);
         pr_decode_alpha444_lanes8<<<grid, block, 0, stream>>>(
-            d_compressed, slices, d_alpha, stride_a, bit_depth, num_slices);
+            d_compressed, slices, d_alpha, stride_a, width, height, bit_depth, alpha_info, num_slices);
     }
     return cudaGetLastError();
 }
@@ -588,12 +591,13 @@ cudaError_t cupr_decode_444_to_nv12a_async(
     int width,
     int height,
     int bit_depth,
+    int alpha_info,
     int num_slices,
     int strategy,
     cudaStream_t stream) {
     auto err = cupr_launch_decode_422(d_compressed, d_slices, d_y, d_cb, d_cr, width, height, bit_depth, num_slices, strategy, 3, stream);
     if (err != cudaSuccess) return err;
-    err = cupr_launch_decode_alpha444(d_compressed, d_slices, d_alpha, width, bit_depth, num_slices, strategy, stream);
+    err = cupr_launch_decode_alpha444(d_compressed, d_slices, d_alpha, width, height, bit_depth, alpha_info, num_slices, strategy, stream);
     if (err != cudaSuccess) return err;
     const int stride_y = width;
     const int stride_c = width;
@@ -623,12 +627,13 @@ cudaError_t cupr_decode_444_to_p010a_async(
     int width,
     int height,
     int bit_depth,
+    int alpha_info,
     int num_slices,
     int strategy,
     cudaStream_t stream) {
     auto err = cupr_launch_decode_422(d_compressed, d_slices, d_y, d_cb, d_cr, width, height, bit_depth, num_slices, strategy, 3, stream);
     if (err != cudaSuccess) return err;
-    err = cupr_launch_decode_alpha444(d_compressed, d_slices, d_alpha, width, bit_depth, num_slices, strategy, stream);
+    err = cupr_launch_decode_alpha444(d_compressed, d_slices, d_alpha, width, height, bit_depth, alpha_info, num_slices, strategy, stream);
     if (err != cudaSuccess) return err;
     const int stride_y = width;
     const int stride_c = width;
