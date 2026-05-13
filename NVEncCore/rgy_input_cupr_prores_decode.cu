@@ -445,12 +445,12 @@ extern "C" __global__ void prores_decode_slice(
     // Cb
     if(tid==0){for(int i=0;i<cb*64;i++)smem[i]=0; BitReader br; br_init(&br,sd+hs+yds,uds); decode_dc_coeffs(&br,smem,cb); decode_ac_coeffs(&br,smem,cb);}
     __syncthreads();
-    if(tid<cb){int16_t*b=smem+tid*64; idct_put_cq(b,c_chroma_qmat,qs,bits_per_component); int m,bx,by; if(is_444){m=tid/4;int s=tid%4;bx=(s&1)*8;by=(s>>1)*8;}else{m=tid/2;int s=tid%2;bx=0;by=s*8;} int ms=is_444?16:8; int16_t*d=out_cb+(si.mb_y*16+by)*stride_c+(si.mb_x+m)*ms+bx; for(int r=0;r<8;r++)for(int c=0;c<8;c++)d[r*stride_c+c]=b[r*8+c];}
+    if(tid<cb){int16_t*b=smem+tid*64; idct_put_cq(b,c_chroma_qmat,qs,bits_per_component); int m,bx,by; if(is_444){m=tid/4;int s=tid%4;bx=(s>>1)*8;by=(s&1)*8;}else{m=tid/2;int s=tid%2;bx=0;by=s*8;} int ms=is_444?16:8; int16_t*d=out_cb+(si.mb_y*16+by)*stride_c+(si.mb_x+m)*ms+bx; for(int r=0;r<8;r++)for(int c=0;c<8;c++)d[r*stride_c+c]=b[r*8+c];}
     __syncthreads();
     // Cr
     if(tid==0){for(int i=0;i<cb*64;i++)smem[i]=0; int cs=vds;if(cs<0)cs=0; BitReader br; br_init(&br,sd+hs+yds+uds,cs); decode_dc_coeffs(&br,smem,cb); decode_ac_coeffs(&br,smem,cb);}
     __syncthreads();
-    if(tid<cb){int16_t*b=smem+tid*64; idct_put_cq(b,c_chroma_qmat,qs,bits_per_component); int m,bx,by; if(is_444){m=tid/4;int s=tid%4;bx=(s&1)*8;by=(s>>1)*8;}else{m=tid/2;int s=tid%2;bx=0;by=s*8;} int ms=is_444?16:8; int16_t*d=out_cr+(si.mb_y*16+by)*stride_c+(si.mb_x+m)*ms+bx; for(int r=0;r<8;r++)for(int c=0;c<8;c++)d[r*stride_c+c]=b[r*8+c];}
+    if(tid<cb){int16_t*b=smem+tid*64; idct_put_cq(b,c_chroma_qmat,qs,bits_per_component); int m,bx,by; if(is_444){m=tid/4;int s=tid%4;bx=(s>>1)*8;by=(s&1)*8;}else{m=tid/2;int s=tid%2;bx=0;by=s*8;} int ms=is_444?16:8; int16_t*d=out_cr+(si.mb_y*16+by)*stride_c+(si.mb_x+m)*ms+bx; for(int r=0;r<8;r++)for(int c=0;c<8;c++)d[r*stride_c+c]=b[r*8+c];}
 }
 
 // === Lane-parallel decode: each thread decodes one slice independently ===
@@ -742,6 +742,119 @@ DEFINE_PR_DECODE_LUMA_LANES(pr_decode_luma_lanes16, 16)
 DEFINE_PR_DECODE_LUMA_LANES(pr_decode_luma_lanes8, 8)
 DEFINE_PR_DECODE_CHROMA422_BOTH_LANES(pr_decode_chroma422_both_lanes16, 16)
 DEFINE_PR_DECODE_CHROMA422_BOTH_LANES(pr_decode_chroma422_both_lanes8, 8)
+
+// 444 chroma lane-parallel: 4 blocks/MB, column-major placement (bx=(s>>1)*8, by=(s&1)*8)
+#define DEFINE_PR_DECODE_CHROMA444_BOTH_LANES(NAME, LANES) \
+extern "C" __global__ void __launch_bounds__(32, 1) NAME( \
+    const uint8_t *compressed, const SliceInfo *slice_info, \
+    int16_t *out_cb, int16_t *out_cr, int stride_c, \
+    int bits_per_component, int num_slices \
+) { \
+    __shared__ int s_qmat[64]; \
+    __shared__ int s_scan_lane[64 * 32]; \
+    __shared__ int s_dc_cb[128]; \
+    __shared__ int s_run_cb[512]; \
+    __shared__ int s_level_cb[320]; \
+    int tid = threadIdx.x; \
+    for (int i = 0; i < 64; i++) s_scan_lane[i * 32 + tid] = c_scan[i]; \
+    s_qmat[tid] = c_chroma_qmat[tid]; \
+    s_qmat[tid + 32] = c_chroma_qmat[tid + 32]; \
+    init_entropy_luts(tid, s_dc_cb, s_run_cb, s_level_cb); \
+    __syncthreads(); \
+    if (tid >= LANES) return; \
+    int work_idx = blockIdx.x * LANES + tid; \
+    if (work_idx >= num_slices) return; \
+    SliceInfo si = slice_info[work_idx]; \
+    const uint8_t *sd = compressed + si.offset; \
+    int hs = sd[0] >> 3; \
+    int qs; { int rq=sd[1]; if(rq<1)rq=1; if(rq>224)rq=224; qs=rq>128?(rq-96)<<2:rq; } \
+    int yds = (sd[2]<<8)|sd[3]; \
+    int uds = (sd[4]<<8)|sd[5]; \
+    int vds = (hs > 7) ? ((sd[6]<<8)|sd[7]) : ((int)si.size - yds - uds - hs); \
+    int cb = si.mb_count * 4; \
+    int16_t blocks[32 * 64]; \
+    for (int plane = 0; plane < 2; plane++) { \
+        const uint8_t *plane_data = plane == 0 ? sd + hs + yds : sd + hs + yds + uds; \
+        int plane_size = plane == 0 ? uds : (vds > 0 ? vds : 0); \
+        int16_t *out_plane = plane == 0 ? out_cb : out_cr; \
+        zero_blocks_i16(blocks, cb); \
+        BitReader br; \
+        br_init(&br, plane_data, plane_size); \
+        if (si.mb_count == 8) { \
+            decode_dc_coeffs_lut_fixed<32>(&br, blocks, s_dc_cb, tid); \
+            decode_ac_coeffs_lut_fixed<5, 31, 2048>(&br, blocks, s_scan_lane, s_run_cb, s_level_cb, tid); \
+        } else { \
+            decode_dc_coeffs_lut(&br, blocks, cb, s_dc_cb, tid); \
+            decode_ac_coeffs_lut(&br, blocks, cb, s_scan_lane, s_run_cb, s_level_cb, tid); \
+        } \
+        for (int b = 0; b < cb; b++) { \
+            int16_t *blk = blocks + b * 64; \
+            idct_put_cq_shared(blk, s_qmat, qs, bits_per_component); \
+            int mb = b / 4, sub = b % 4; \
+            int bx = (sub >> 1) * 8, by = (sub & 1) * 8; \
+            int16_t *dst = out_plane + (si.mb_y * 16 + by) * stride_c + (si.mb_x + mb) * 16 + bx; \
+            store_block8x8_i16(dst, stride_c, blk); \
+        } \
+    } \
+}
+
+DEFINE_PR_DECODE_CHROMA444_BOTH_LANES(pr_decode_chroma444_both_lanes16, 16)
+DEFINE_PR_DECODE_CHROMA444_BOTH_LANES(pr_decode_chroma444_both_lanes8, 8)
+
+// 444 alpha lane-parallel: 4 blocks/MB, row-major placement (same as Y: bx=(s&1)*8, by=(s>>1)*8)
+// Uses luma qmat. Data offset: after Y/Cb/Cr in slice.
+#define DEFINE_PR_DECODE_ALPHA444_LANES(NAME, LANES) \
+extern "C" __global__ void __launch_bounds__(32, 1) NAME( \
+    const uint8_t *compressed, const SliceInfo *slice_info, \
+    int16_t *out_alpha, int stride_a, \
+    int bits_per_component, int num_slices \
+) { \
+    __shared__ int s_qmat[64]; \
+    __shared__ int s_scan_lane[64 * 32]; \
+    __shared__ int s_dc_cb[128]; \
+    __shared__ int s_run_cb[512]; \
+    __shared__ int s_level_cb[320]; \
+    int tid = threadIdx.x; \
+    for (int i = 0; i < 64; i++) s_scan_lane[i * 32 + tid] = c_scan[i]; \
+    s_qmat[tid] = c_luma_qmat[tid]; \
+    s_qmat[tid + 32] = c_luma_qmat[tid + 32]; \
+    init_entropy_luts(tid, s_dc_cb, s_run_cb, s_level_cb); \
+    __syncthreads(); \
+    if (tid >= LANES) return; \
+    int work_idx = blockIdx.x * LANES + tid; \
+    if (work_idx >= num_slices) return; \
+    SliceInfo si = slice_info[work_idx]; \
+    const uint8_t *sd = compressed + si.offset; \
+    int hs = sd[0] >> 3; \
+    int qs; { int rq=sd[1]; if(rq<1)rq=1; if(rq>224)rq=224; qs=rq>128?(rq-96)<<2:rq; } \
+    int yds = (sd[2]<<8)|sd[3]; \
+    int uds = (sd[4]<<8)|sd[5]; \
+    int vds = (hs > 7) ? ((sd[6]<<8)|sd[7]) : ((int)si.size - yds - uds - hs); \
+    int ads = (hs > 9) ? ((sd[8]<<8)|sd[9]) : 0; \
+    int ab = si.mb_count * 4; \
+    int16_t blocks[32 * 64]; \
+    zero_blocks_i16(blocks, ab); \
+    BitReader br; \
+    br_init(&br, sd + hs + yds + uds + vds, ads); \
+    if (si.mb_count == 8) { \
+        decode_dc_coeffs_lut_fixed<32>(&br, blocks, s_dc_cb, tid); \
+        decode_ac_coeffs_lut_fixed<5, 31, 2048>(&br, blocks, s_scan_lane, s_run_cb, s_level_cb, tid); \
+    } else { \
+        decode_dc_coeffs_lut(&br, blocks, ab, s_dc_cb, tid); \
+        decode_ac_coeffs_lut(&br, blocks, ab, s_scan_lane, s_run_cb, s_level_cb, tid); \
+    } \
+    for (int b = 0; b < ab; b++) { \
+        int16_t *blk = blocks + b * 64; \
+        idct_put_cq_shared(blk, s_qmat, qs, bits_per_component); \
+        int mb = b / 4, sub = b % 4; \
+        int bx = (sub & 1) * 8, by = (sub >> 1) * 8; \
+        int16_t *dst = out_alpha + (si.mb_y * 16 + by) * stride_a + (si.mb_x + mb) * 16 + bx; \
+        store_block8x8_i16(dst, stride_a, blk); \
+    } \
+}
+
+DEFINE_PR_DECODE_ALPHA444_LANES(pr_decode_alpha444_lanes16, 16)
+DEFINE_PR_DECODE_ALPHA444_LANES(pr_decode_alpha444_lanes8, 8)
 
 extern "C" __global__ void __launch_bounds__(32, 1) pr_decode_luma_lanes8_smem(
     const uint8_t *compressed, const SliceInfo *slice_info,

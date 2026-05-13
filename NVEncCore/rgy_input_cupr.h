@@ -67,16 +67,19 @@ private:
     RGY_CUPR_DECODE_STRATEGY m_selectedStrategy;
     int m_autoBenchmarkCount;
     float m_autoBenchmarkMs[4];
+    bool m_srcInfoUpdated;
     uint8_t *m_dCompressed;
     uint8_t *m_dSlices;
     int16_t *m_dY;
     int16_t *m_dCb;
     int16_t *m_dCr;
+    int16_t *m_dAlpha;
     size_t m_dCompressedCapacity;
     size_t m_dSlicesCapacity;
     size_t m_dYCapacity;
     size_t m_dCbCapacity;
     size_t m_dCrCapacity;
+    size_t m_dAlphaCapacity;
 };
 
 #endif //ENABLE_AVSW_READER && ENCODER_NVENC
