@@ -44,6 +44,8 @@
   - [--vpy](#--vpy)
   - [--avsw \[\<string\>\]](#--avsw-string)
   - [--avhw](#--avhw)
+  - [--cupr](#--cupr)
+  - [--cupr-strategy \<string\>](#--cupr-strategy-string)
   - [--interlace \<string\>](#--interlace-string)
   - [--video-track \<int\>](#--video-track-int)
   - [--crop \<int\>,\<int\>,\<int\>,\<int\>](#--crop-intintintint)
@@ -469,6 +471,7 @@ reader used will be selected depending on the extension of input file.
 | vpy    |   ◎   |      |   ◎   |   ◎   |       |       |
 | avhw   |   □   |      |        |   ◇   |       |       |
 | avsw   |   ◎   |      |   ◎   |   ◎   |   ○  |   ○  |
+| cupr   |   □   |      |   □   |        |       |       |
 
 ◎ ... 8bit / 9bit / 10bit / 12bit / 14bit / 16bit supported  
 ◇ ... 8bit / 10bit / 12bit supported  
@@ -517,8 +520,24 @@ since entire transcode process will be run on the GPU.
 | VC-1       | ○ |
 | WMV3/WMV9  | × |
 
-○ ... supported  
+○ ... supported
 × ... no support
+
+### --cupr
+Read input file using avformat demux and CUDA ProRes decode. In this mode, avformat is used for demuxing, timestamps, audio, subtitles, data streams and attachments, while ProRes video packets are decoded directly on CUDA into GPU surfaces for NVEnc.
+
+Currently supports 10-bit ProRes 4:2:2 and 10-bit/12-bit ProRes 4:4:4 (including alpha channel) input.
+
+The CUDA output format is selected from the encoder input path. Common 8-bit H.264 output decodes directly to NV12, while 10-bit HEVC/AV1 output decodes directly to P010. P210 is still used when 4:2:2 10-bit preservation is required.
+
+### --cupr-strategy &lt;string&gt;
+Set CUDA ProRes decode strategy.
+
+```
+auto, lane8, lane16, dual, wide
+```
+
+Default: auto. Auto benchmarks the first few frames at startup and selects the fastest strategy.
 
 ### --interlace &lt;string&gt;
 Set interlace flag of **input** frame.

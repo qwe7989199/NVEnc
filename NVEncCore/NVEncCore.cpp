@@ -1757,6 +1757,7 @@ RGY_ERR NVEncCore::SetInputParam(InEncodeVideoParam *inputParam) {
         }
         return RGY_ERR_UNSUPPORTED;
     }
+
     if (is_interlaced(m_stPicStruct)
         && ((inputParam->input.crop.e.left & 1) || (inputParam->input.crop.e.right & 1)
             || (inputParam->input.crop.e.up & height_check_mask) || (inputParam->input.crop.e.bottom & height_check_mask))) {
@@ -3038,7 +3039,7 @@ std::vector<VppType> NVEncCore::InitFiltersCreateVppList(const InEncodeVideoPara
 RGY_ERR NVEncCore::InitFilters(const InEncodeVideoParam *inputParam) {
     //cuvidデコーダの場合、cropを入力時に行っていない場合がある
     const bool cropRequired = cropEnabled(inputParam->input.crop)
-        && m_pFileReader->getInputCodec() != RGY_CODEC_UNKNOWN
+        && (m_pFileReader->getInputCodec() != RGY_CODEC_UNKNOWN || inputParam->input.type == RGY_INPUT_FMT_CUPR )
         && CUVID_DISABLE_CROP;
 
     RGYFrameInfo inputFrame;
@@ -3146,6 +3147,11 @@ RGY_ERR NVEncCore::InitFilters(const InEncodeVideoParam *inputParam) {
         }
     };
     auto filterCsp = normalizeFilterCsp(encCsp);
+    if (RGY_CSP_CHROMA_FORMAT[inputFrame.csp] == RGY_CHROMAFMT_RGB
+        && (encCsp == RGY_CSP_NV12 || encCsp == RGY_CSP_P010)
+        && filterPipeline.size() == 1 && filterPipeline.front() == VppType::CL_CROP) {
+        filterCsp = encCsp;
+    }
     auto firstFilterCsp = (useInputCspForDeint) ? normalizeFilterCsp(inputFrame.csp) : filterCsp;
     if (inputParam->vpp.afs.enable && RGY_CSP_CHROMA_FORMAT[inputFrame.csp] == RGY_CHROMAFMT_YUV444) {
         firstFilterCsp = (RGY_CSP_BIT_DEPTH[inputFrame.csp] > 8) ? RGY_CSP_YUV444_16 : RGY_CSP_YUV444;
@@ -5343,6 +5349,11 @@ RGY_ERR NVEncCore::initPipeline(const InEncodeVideoParam *prm) {
         m_pipelineTasks.push_back(std::make_unique<PipelineTaskNVDecode>(m_dev.get(), m_pDecoder.get(), 0, m_pFileReader.get(), parallelEncEndPts, prm->ctrl.threadParams.get(RGYThreadType::DEC), m_pLog));
         taskNVDec = dynamic_cast<PipelineTaskNVDecode *>(m_pipelineTasks.back().get());
     } else {
+#if ENABLE_AVSW_READER && ENCODER_NVENC
+        if (auto cuprReader = dynamic_cast<RGYInputCupr *>(m_pFileReader.get()); cuprReader != nullptr) {
+            m_pipelineTasks.push_back(std::make_unique<PipelineTaskCuprInput>(m_dev.get(), 1, cuprReader, parallelEncEndPts, prm->ctrl.threadParams.get(RGYThreadType::INPUT), m_pLog));
+        } else
+#endif
         m_pipelineTasks.push_back(std::make_unique<PipelineTaskInput>(m_dev.get(), 1, m_pFileReader.get(), parallelEncEndPts, prm->ctrl.threadParams.get(RGYThreadType::INPUT), m_pLog));
     }
     if (m_pFileWriterListAudio.size() > 0 || hasFilterForStreams(m_vpFilters)) {

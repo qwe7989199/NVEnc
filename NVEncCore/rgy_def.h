@@ -172,8 +172,17 @@ enum RGY_INPUT_FMT {
     RGY_INPUT_FMT_VPY_MT,
     RGY_INPUT_FMT_AVHW,
     RGY_INPUT_FMT_AVSW,
+    RGY_INPUT_FMT_CUPR,
     RGY_INPUT_FMT_AVANY,
     RGY_INPUT_FMT_SM,
+};
+
+enum RGY_CUPR_DECODE_STRATEGY {
+    RGY_CUPR_DECODE_STRATEGY_AUTO = 0,
+    RGY_CUPR_DECODE_STRATEGY_LANE8,
+    RGY_CUPR_DECODE_STRATEGY_LANE16,
+    RGY_CUPR_DECODE_STRATEGY_DUAL,
+    RGY_CUPR_DECODE_STRATEGY_WIDE,
 };
 
 typedef struct CX_DESC {
@@ -887,6 +896,15 @@ static RGYAVSync operator~(RGYAVSync a) {
 }
 
 const CX_DESC list_empty[] = {
+    { NULL, 0 }
+};
+
+const CX_DESC list_cupr_decode_strategy[] = {
+    { _T("auto"),   RGY_CUPR_DECODE_STRATEGY_AUTO },
+    { _T("lane8"),  RGY_CUPR_DECODE_STRATEGY_LANE8 },
+    { _T("lane16"), RGY_CUPR_DECODE_STRATEGY_LANE16 },
+    { _T("dual"),   RGY_CUPR_DECODE_STRATEGY_DUAL },
+    { _T("wide"),   RGY_CUPR_DECODE_STRATEGY_WIDE },
     { NULL, 0 }
 };
 

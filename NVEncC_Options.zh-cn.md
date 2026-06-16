@@ -45,6 +45,8 @@
     - [--vpy](#--vpy)
     - [--avsw](#--avsw)
     - [--avhw](#--avhw)
+    - [--cupr](#--cupr)
+    - [--cupr-strategy \<string\>](#--cupr-strategy-string)
     - [--interlace \<string\>](#--interlace-string)
     - [--video-track \<int\>](#--video-track-int)
     - [--crop \<int\>,\<int\>,\<int\>,\<int\>](#--crop-intintintint)
@@ -430,6 +432,7 @@ nvidia-smi 通常与驱动一起安装在 "C:\Program Files\NVIDIA Corporation\N
 | vpy    |   ◎   |      |   ◎   |   ◎   |       |       |
 | avhw   |   □   |      |        |   ◇   |       |       |
 | avsw   |   ◎   |      |   ◎   |   ◎   |   ○  |   ○  |
+| cupr   |   □   |      |   □   |        |       |       |
 
 ◎ ... 支持 8bit / 9bit / 10bit / 12bit / 14bit / 16bit  
 ◇ ... 支持 8bit / 10bit / 12bit  
@@ -486,6 +489,24 @@ NVEncC 默认使用 UTF-8 编码格式读取文件, 因此当 Avisynth 脚本文
 
 ○ ... 支持  
 × ... 不支持
+
+### --cupr
+
+使用 avformat demux 和 CUDA ProRes 解码读取输入。该模式下 avformat 负责 demux、时间戳、音频、字幕、数据流和附件，ProRes 视频 packet 由 CUDA 直接解码到 NVEnc 使用的 GPU surface。
+
+当前支持 10-bit ProRes 4:2:2 和 10-bit/12-bit ProRes 4:4:4（包含 Alpha 通道）输入。
+
+CUDA 输出格式会根据编码器输入路径选择。常见的 8-bit H.264 输出会直接解码到 NV12，10-bit HEVC/AV1 输出会直接解码到 P010；需要保留 4:2:2 10-bit 时仍使用 P210。
+
+### --cupr-strategy &lt;string&gt;
+
+设置 CUDA ProRes 解码策略。
+
+```
+auto, lane8, lane16, dual, wide
+```
+
+默认: auto。auto 会在启动时抽取最初几帧做微基准，并选择最快的策略。
 
 ### --interlace &lt;string&gt;
 

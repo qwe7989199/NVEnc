@@ -3272,7 +3272,8 @@ tstring RGYDebugLogFile::getFilename(const tstring& outputFilename, const tstrin
 RGYParamInput::RGYParamInput() :
     resizeResMode(RGYResizeResMode::Normal),
     ignoreSAR(false),
-    avswDecoder() {
+    avswDecoder(),
+    cuprStrategy(RGY_CUPR_DECODE_STRATEGY_AUTO) {
 
 }
 
