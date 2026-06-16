@@ -7684,6 +7684,15 @@ int parse_one_input_option(const TCHAR *option_name, const TCHAR *strInput[], in
         return 1;
 #endif
     }
+    if (IS_OPTION("nvj2k")) {
+#if ENABLE_AVSW_READER && ENCODER_NVENC
+        input->type = RGY_INPUT_FMT_NVJ2K;
+        return 0;
+#else
+        _ftprintf(stderr, _T("nvj2k reader not supported in this build.\n"));
+        return 1;
+#endif
+    }
     if (IS_OPTION("tff")) {
         input->picstruct = RGY_PICSTRUCT_FRAME_TFF;
         return 0;
@@ -10421,6 +10430,7 @@ tstring gen_cmd(const VideoInfo *param, const VideoInfo *defaultPrm, const RGYPa
     case RGY_INPUT_FMT_VPY_MT: cmd << _T(" --vpy-mt"); break;
     case RGY_INPUT_FMT_AVHW:   cmd << _T(" --avhw"); break;
     case RGY_INPUT_FMT_AVSW:   cmd << _T(" --avsw"); if (!inprm->avswDecoder.empty()) cmd << _T(" ") << inprm->avswDecoder; break;
+    case RGY_INPUT_FMT_NVJ2K:  cmd << _T(" --nvj2k"); break;
     default: break;
     }
     if (param->csp != RGY_CSP_NA) {
@@ -12355,6 +12365,9 @@ tstring gen_cmd_help_input() {
 #if ENABLE_AVSW_READER
         _T("   --avhw                       use libavformat + hw decode for input\n")
         _T("   --avsw [<string>]            set input to use avcodec + sw decoder\n")
+#if ENCODER_NVENC
+        _T("   --nvj2k                      use libavformat demux + nvJPEG2000 CUDA decode for input\n")
+#endif
 #endif
         _T("   --input-res <int>x<int>        set input resolution\n")
         _T("   --crop <int>,<int>,<int>,<int> crop pixels from left,top,right,bottom\n")

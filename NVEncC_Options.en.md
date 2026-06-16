@@ -44,6 +44,7 @@
   - [--vpy](#--vpy)
   - [--avsw \[\<string\>\]](#--avsw-string)
   - [--avhw](#--avhw)
+  - [--nvj2k](#--nvj2k)
   - [--interlace \<string\>](#--interlace-string)
   - [--video-track \<int\>](#--video-track-int)
   - [--crop \<int\>,\<int\>,\<int\>,\<int\>](#--crop-intintintint)
@@ -469,6 +470,7 @@ reader used will be selected depending on the extension of input file.
 | vpy    |   ◎   |      |   ◎   |   ◎   |       |       |
 | avhw   |   □   |      |        |   ◇   |       |       |
 | avsw   |   ◎   |      |   ◎   |   ◎   |   ○  |   ○  |
+| nvj2k  |   ◎   |      |   ◎   |   ◎   |       |       |
 
 ◎ ... 8bit / 9bit / 10bit / 12bit / 14bit / 16bit supported  
 ◇ ... 8bit / 10bit / 12bit supported  
@@ -517,8 +519,13 @@ since entire transcode process will be run on the GPU.
 | VC-1       | ○ |
 | WMV3/WMV9  | × |
 
-○ ... supported  
+○ ... supported
 × ... no support
+
+### --nvj2k
+Read input file using avformat demux and nvJPEG2000 CUDA decode. Supports 8-bit, 10-bit, 12-bit, and 16-bit JPEG 2000 input. In this mode, avformat is used for demuxing, timestamps, audio, subtitles, data streams and attachments, while JPEG 2000 video packets are decoded directly on CUDA into GPU surfaces for NVEnc.
+
+The CUDA output format is selected from the encoder input path, such as NV12/P010 for 4:2:0 output, NV16/P210 for 4:2:2 output, and YUV444/GBR surfaces for 4:4:4 output.
 
 ### --interlace &lt;string&gt;
 Set interlace flag of **input** frame.

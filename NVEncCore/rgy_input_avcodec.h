@@ -816,6 +816,7 @@ public:
     uint8_t        memType;                 //使用するメモリの種類
     const TCHAR   *pInputFormat;            //入力フォーマット
     bool           readVideo;               //映像の読み込みを行うかどうか
+    bool           disableVideoDecode;      //動画packetのみ読み込み、avcodec/cuvidデコードは行わない
     int            videoTrack;              //動画トラックの選択
     int            videoStreamId;           //動画StreamIdの選択
     uint32_t       readAudio;               //音声の読み込みを行うかどうか (AVQSV_AUDIO_xxx)

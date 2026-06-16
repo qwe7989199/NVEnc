@@ -904,7 +904,7 @@ SRC_NVENCC="NVEncC.cpp"
 
 PYW_PERF_MONITOR="perf_monitor.pyw"
 
-BINS="resource/nnedi3_weights.bin"
+BINS="resource/nnedi3_weight/nnedi3_weights.bin"
 
 BINHS="NVEncCore/NVEncFilterColorspaceFunc.h"
 

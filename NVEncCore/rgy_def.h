@@ -172,9 +172,11 @@ enum RGY_INPUT_FMT {
     RGY_INPUT_FMT_VPY_MT,
     RGY_INPUT_FMT_AVHW,
     RGY_INPUT_FMT_AVSW,
+    RGY_INPUT_FMT_NVJ2K,
     RGY_INPUT_FMT_AVANY,
     RGY_INPUT_FMT_SM,
 };
+
 
 typedef struct CX_DESC {
     const TCHAR *desc;
@@ -889,6 +891,7 @@ static RGYAVSync operator~(RGYAVSync a) {
 const CX_DESC list_empty[] = {
     { NULL, 0 }
 };
+
 
 static bool is_list_empty(const CX_DESC *list) {
     return list[0].desc == nullptr;
