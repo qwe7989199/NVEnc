@@ -214,6 +214,43 @@ NVIDIA グラフィックドライバ 551.23
 今後の更新で設定ファイルの互換性がなくなるかもしれません。
 
 【メモ】
+2026.06.15 (9.19)
+- nnedi3_weight.binをパッケージに同梱。
+- vpp-kfmのRTGMC preset medium時のエラーを修正。(vpp-nnediのnnsize=5) ( #776 )
+- --vpp-rtgmc の chroma_motion=false の処理を修正。( #777 )
+- chroma_motion=true, source_match=3 で failed to copy edi side-data frame となる問題を修正。
+- vpp-rtgmcのDegrain解析結果の再利用を修正。
+- rtgmc-search-prefilterのフレームプール確保を修正。
+
+2026.06.13 (9.18)
+- 24/30/60混合VFR対応高品質インタレ解除フィルタ --vpp-kfm を追加。
+- 高品質インタレ解除フィルタ --vpp-rtgmc を追加。
+- 動き補償デノイズフィルタ --vpp-degrain を追加。
+- --vpp-nnedi を新仕様に更新。
+- 出力解像度が偶数になる条件の奇数cropに対応。( #772 )
+- libavformatが負のptsを返す場合に音ズレしてしまう場合があったのを修正。
+- --vpp-kfm VFRモード + raw出力時にクラッシュする問題を修正。
+- --vpp-kfmの挙動を修正。
+- --vpp-kfm, --vpp-rtgmcのインタレ解除反映を修正。
+
+[NVEnc.auo]
+- --vpp-rtgmc, --vpp-kfmを設定欄に追加。
+- NVEnc.auoの挙動を修正。
+- NVEnc.auo2のビルドを修正。
+
+2026.06.06 (9.17)
+- --vpp-bwdif, --vpp-ivtc を追加。
+- --vpp-detailsharpen を追加。( #762 )
+- 色被り中和・明度正規化・コントラスト/彩度強調を行うSoftLightフィルタを追加。(--vpp-softlight)
+- yuv444入力時のクロップ処理で端の画素が正しく書き込まれない問題を修正。( #763 )
+- neroaacencで2pass出力ができない問題を修正。
+- AV1エンコードの--qvbrの上限を63まで拡張。
+- --lowlatencyが9.15からLinux環境で壊れていたのを修正。
+
+[NVEnc.auo]
+- AviUtl2では不要になったiniファイルへのファイルフィルタへの書き出しを削除。
+- ffmpeg(opus)のエンコードエラーを修正。
+
 2026.05.01 (9.16)
 - bluray等のMPEG-TS入力で字幕焼きこみが正しく動作するように。 ( #756 )
 - libopusで 5.1 / 7.1 などのエンコードができない問題を修正。

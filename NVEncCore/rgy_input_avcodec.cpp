@@ -269,6 +269,7 @@ RGYInputAvcodecPrm::RGYInputAvcodecPrm(RGYInputPrm base) :
     queueInfo(nullptr),
     HWDecCodecCsp(nullptr),
     videoDetectPulldown(false),
+    suppressPulldownMutation(false),
     parseHDRmetadata(false),
     hdr10plusMetadataCopy(false),
     doviRpuMetadataCopy(false),
@@ -287,7 +288,9 @@ RGYInputAvcodec::RGYInputAvcodec() :
     m_Demux(),
     m_logFramePosList(),
     m_fpPacketList(),
-    m_hevcMp42AnnexbBuffer() {
+    m_hevcMp42AnnexbBuffer(),
+    m_suppressPulldownDetect(false),
+    m_pulldownDetected(false) {
     m_readerName = _T("av" DECODER_NAME "/avsw");
 }
 
@@ -806,6 +809,7 @@ RGY_ERR RGYInputAvcodec::getFirstFramePosAndFrameRate(const sTrim *pTrimList, in
     std::vector<int> frameDurationList;
     vector<std::pair<int, int>> durationHistgram;
     bool bPulldown = false;
+    m_pulldownDetected = false;
 
     // m_Demux.qVideoPktに入っているパケットがあれば、まずはそれを解析する
     auto qVideoPktCheckCount = (int)m_Demux.qVideoPkt.size();
@@ -936,6 +940,7 @@ RGY_ERR RGYInputAvcodec::getFirstFramePosAndFrameRate(const sTrim *pTrimList, in
                 }
             }
             bPulldown = (bDetectpulldown && ((rff_frames + 1/*たまたま切り捨てられることのないように*/) / (double)nFramesToCheck > 0.45));
+            m_pulldownDetected = bPulldown;
 
             //durationのヒストグラムを作成
             std::for_each(frameDurationList.begin(), frameDurationList.end(), [&durationHistgram](const int& duration) {
@@ -999,7 +1004,11 @@ RGY_ERR RGYInputAvcodec::getFirstFramePosAndFrameRate(const sTrim *pTrimList, in
             //std::accumulateの初期値に"(uint64_t)0"と与えることで、64bitによる計算を実行させ、桁あふれを防ぐ
             //大きすぎるtimebaseの時に必要
             double avgDuration = std::accumulate(frameDurationList.begin(), frameDurationList.end(), (uint64_t)0, [this](const uint64_t sum, const int& duration) { return sum + duration; }) / (double)(frameDurationList.size());
-            if (bPulldown) {
+            // Detection is separate from mutation. bPulldown was set above (line 937) so
+            // downstream diagnostics/logs still see the signal. Only the avgDuration
+            // rewrite is gated — --vpp-ivtc expand=on/auto suppresses it because the
+            // filter needs the real stream fps to drive its cycle auto-resolve.
+            if (bPulldown && !m_suppressPulldownDetect) {
                 avgDuration *= 1.25;
             }
             double avgFps = m_Demux.video.stream->time_base.den / (double)(avgDuration * m_Demux.video.stream->time_base.num);
@@ -1662,6 +1671,11 @@ RGY_ERR RGYInputAvcodec::initFormatCtx(const TCHAR *strFileName, const RGYInputA
 #pragma warning(disable:4127) //warning C4127: 条件式が定数です。
 RGY_ERR RGYInputAvcodec::Init(const TCHAR *strFileName, VideoInfo *inputInfo, const RGYInputPrm *prm) {
     const RGYInputAvcodecPrm *input_prm = dynamic_cast<const RGYInputAvcodecPrm*>(prm);
+
+    // Propagate the "detect but do not rewrite avgDuration" flag into the class
+    // member before getFirstFramePosAndFrameRate runs. Consumed at rgy_input_avcodec.cpp
+    // bPulldown-mutation site. Set by --vpp-ivtc expand=on/auto.
+    m_suppressPulldownDetect = input_prm->suppressPulldownMutation;
 
     if (input_prm->readVideo) {
         if (inputInfo->type != RGY_INPUT_FMT_AVANY) {
@@ -2813,9 +2827,10 @@ bool RGYInputAvcodec::checkStreamPacketToAdd(AVPacket *pkt, AVDemuxStream *strea
                 stream->trimOffset += std::max<int64_t>(0, vid0_start - vid0_first);
             } else {
                 assert(frame_trim_block_index > 0);
-                const int last_valid_vid_frame = m_trimParam.list[frame_trim_block_index-1].start;
+                const int last_valid_vid_frame = clamp(m_trimParam.list[frame_trim_block_index-1].fin, 0, m_Demux.frames.frameNum() - 1);
                 assert(last_valid_vid_frame >= 0);
-                const int64_t vid0_fin = convertTimebaseVidToStream(m_Demux.frames.list(last_valid_vid_frame).pts, stream);
+                const auto& vid0 = m_Demux.frames.list(last_valid_vid_frame);
+                const int64_t vid0_fin = convertTimebaseVidToStream(vid0.pts + vid0.duration, stream);
                 const int64_t vid1_start = convertTimebaseVidToStream(vidFramePos->pts, stream);
                 const int64_t vid_start = (frame_is_in_range.first) ? vid1_start : vid2_start;
                 if (vid_start - vid0_fin > aud1_start - stream->aud0_fin) {

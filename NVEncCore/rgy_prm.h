@@ -57,6 +57,17 @@ static const int RGY_AUDIO_QUALITY_DEFAULT = 0;
 #define ENABLE_VPP_FILTER_NNEDI        (ENCODER_QSV   || ENCODER_NVENC || ENCODER_VCEENC || ENCODER_MPP || CLFILTERS_AUF)
 #define ENABLE_VPP_FILTER_YADIF        (ENCODER_QSV   || ENCODER_NVENC || ENCODER_VCEENC || ENCODER_MPP)
 #define ENABLE_VPP_FILTER_DECOMB       (ENCODER_QSV   || ENCODER_NVENC || ENCODER_VCEENC || ENCODER_MPP)
+#define ENABLE_VPP_FILTER_BWDIF        (ENCODER_QSV   || ENCODER_NVENC || ENCODER_VCEENC || ENCODER_MPP)
+#define ENABLE_VPP_FILTER_RTGMC        (                 ENCODER_NVENC)
+#define ENABLE_VPP_FILTER_RTGMC_BOB    (                 ENCODER_NVENC)
+#define ENABLE_VPP_FILTER_RTGMC_SEARCH_PREFILTER (        ENCODER_NVENC)
+#define ENABLE_VPP_FILTER_RTGMC_EDI    (                 ENCODER_NVENC)
+#define ENABLE_VPP_FILTER_RTGMC_RETOUCH (                ENCODER_NVENC)
+#define ENABLE_VPP_FILTER_RTGMC_SHIMMER_REPAIR (         ENCODER_NVENC)
+#define ENABLE_VPP_FILTER_RTGMC_PRIMITIVE (              ENCODER_NVENC)
+#define ENABLE_VPP_FILTER_DEGRAIN      (                 ENCODER_NVENC)
+#define ENABLE_VPP_FILTER_KFM          (                 ENCODER_NVENC)
+#define ENABLE_VPP_FILTER_IVTC         (ENCODER_QSV   || ENCODER_NVENC || ENCODER_VCEENC || ENCODER_MPP)
 #define ENABLE_VPP_FILTER_RFF          (ENCODER_QSV   || ENCODER_NVENC || ENCODER_VCEENC || ENCODER_MPP)
 #define ENABLE_VPP_FILTER_RFF_AVHW     (ENCODER_QSV   || ENCODER_NVENC                   || ENCODER_MPP)
 #define ENABLE_VPP_FILTER_SELECT_EVERY (ENCODER_NVENC)
@@ -72,9 +83,11 @@ static const int RGY_AUDIO_QUALITY_DEFAULT = 0;
 #define ENABLE_VPP_FILTER_CONVOLUTION3D (ENCODER_QSV  || ENCODER_NVENC || ENCODER_VCEENC || ENCODER_MPP)
 #define ENABLE_VPP_FILTER_UNSHARP      (ENCODER_QSV   || ENCODER_NVENC || ENCODER_VCEENC || ENCODER_MPP || CLFILTERS_AUF)
 #define ENABLE_VPP_FILTER_WARPSHARP    (ENCODER_QSV   || ENCODER_NVENC || ENCODER_VCEENC || ENCODER_MPP || CLFILTERS_AUF)
+#define ENABLE_VPP_FILTER_DETAILSHARPEN (ENCODER_NVENC)
 #define ENABLE_VPP_FILTER_EDGELEVEL    (ENCODER_QSV   || ENCODER_NVENC || ENCODER_VCEENC || ENCODER_MPP || CLFILTERS_AUF)
 #define ENABLE_VPP_FILTER_MSHARPEN     (ENCODER_QSV   || ENCODER_NVENC || ENCODER_VCEENC || ENCODER_MPP || CLFILTERS_AUF)
 #define ENABLE_VPP_FILTER_CURVES       (ENCODER_QSV   || ENCODER_NVENC || ENCODER_VCEENC || ENCODER_MPP)
+#define ENABLE_VPP_FILTER_SOFTLIGHT    (ENCODER_NVENC)
 #define ENABLE_VPP_FILTER_TWEAK        (ENCODER_QSV   || ENCODER_NVENC || ENCODER_VCEENC || ENCODER_MPP || CLFILTERS_AUF)
 #define ENABLE_VPP_FILTER_OVERLAY      (ENCODER_QSV   || ENCODER_NVENC || ENCODER_VCEENC || ENCODER_MPP)
 #define ENABLE_VPP_FILTER_DEBAND       (ENCODER_QSV   || ENCODER_NVENC || ENCODER_VCEENC || ENCODER_MPP || CLFILTERS_AUF)
@@ -146,8 +159,15 @@ enum class VppType : int {
     CL_LIBPLACEBO_TONEMAP,
     CL_AFS,
     CL_NNEDI,
+    CL_BWDIF,
+    CL_RTGMC,
+    CL_RTGMC_BOB,
+    CL_RTGMC_SEARCH_PREFILTER,
+    CL_RTGMC_EDI,
+    CL_KFM,
     CL_YADIF,
     CL_DECOMB,
+    CL_IVTC,
     CL_DECIMATE,
     CL_MPDECIMATE,
     CL_RFF,
@@ -162,6 +182,15 @@ enum class VppType : int {
     CL_DENOISE_DCT,
     CL_DENOISE_SMOOTH,
     CL_DENOISE_FFT3D,
+    CL_DEGRAIN,
+    CL_DEGRAIN_ANALYZE,
+    CL_DEGRAIN_APPLY_TR1,
+    CL_DEGRAIN_APPLY_TR2,
+    CL_RTGMC_RETOUCH,
+    CL_RTGMC_SHIMMER_REPAIR,
+    CL_RTGMC_SHIMMER_REPAIR_REP1,
+    CL_RTGMC_SHIMMER_REPAIR_REP2,
+    CL_RTGMC_PRIMITIVE,
     CL_MSMOOTH,
 
     CL_LIBPLACEBO_SHADER,
@@ -174,8 +203,10 @@ enum class VppType : int {
     CL_EDGELEVEL,
     CL_MSHARPEN,
     CL_WARPSHARP,
+    CL_DETAILSHARPEN,
 
     CL_CURVES,
+    CL_SOFTLIGHT,
     CL_TWEAK,
 
     CL_OVERLAY,
@@ -328,6 +359,12 @@ static const int   FILTER_DEFAULT_DECOMB_THRESHOLD = 20;
 static const int   FILTER_DEFAULT_DECOMB_DTHRESHOLD = 7;
 static const bool  FILTER_DEFAULT_DECOMB_BLEND = false;
 
+static const int   FILTER_DEFAULT_BWDIF_MODE = 0;
+static const int   FILTER_DEFAULT_BWDIF_ORDER = -1;
+static const float FILTER_DEFAULT_BWDIF_THR = 0.0f;
+static const int   FILTER_DEFAULT_BWDIF_DEINT = 0;
+static const bool  FILTER_DEFAULT_BWDIF_LOG = false;
+
 static const int   FILTER_DEFAULT_DECIMATE_CYCLE = 5;
 static const int   FILTER_DEFAULT_DECIMATE_DROP = 1;
 static const float FILTER_DEFAULT_DECIMATE_THRE_DUP = 1.1f;
@@ -337,6 +374,26 @@ static const int   FILTER_DEFAULT_DECIMATE_BLOCK_Y = 32;
 static const bool  FILTER_DEFAULT_DECIMATE_PREPROCESSED = false;
 static const bool  FILTER_DEFAULT_DECIMATE_CHROMA = true;
 static const bool  FILTER_DEFAULT_DECIMATE_LOG = false;
+
+static const int   FILTER_DEFAULT_IVTC_TFF = -1;
+static const int   FILTER_DEFAULT_IVTC_GUIDE = 1;
+static const int   FILTER_DEFAULT_IVTC_POST = 2;
+static const int   FILTER_DEFAULT_IVTC_CYCLE = -1;
+static const int   FILTER_DEFAULT_IVTC_DROP = 1;
+static const float FILTER_DEFAULT_IVTC_COMB_THRESH = 0.12f;
+static const float FILTER_DEFAULT_IVTC_CLEAN_FRAC = 0.20f;
+static const int   FILTER_DEFAULT_IVTC_DTHRESH = 7;
+static const bool  FILTER_DEFAULT_IVTC_CHROMA = false;
+static const int   FILTER_DEFAULT_IVTC_BACK = 0;
+static const int   FILTER_DEFAULT_IVTC_Y0 = 0;
+static const int   FILTER_DEFAULT_IVTC_Y1 = 0;
+static const int   FILTER_DEFAULT_IVTC_CADENCE_LOCK = -1;
+static const int   FILTER_DEFAULT_IVTC_GTHRESH = 10;
+static const int   FILTER_DEFAULT_IVTC_EXPAND = -1;
+static const int   FILTER_DEFAULT_IVTC_MIXED = 0;
+static const int   FILTER_DEFAULT_IVTC_VTHRESH = 50;
+static const float FILTER_DEFAULT_IVTC_HYSTERESIS = 0.0f;
+static const bool  FILTER_DEFAULT_IVTC_LOG = false;
 
 static const int   FILTER_DEFAULT_MPDECIMATE_HI = 768;
 static const int   FILTER_DEFAULT_MPDECIMATE_LO = 320;
@@ -429,6 +486,13 @@ static const int   FILTER_DEFAULT_WARPSHARP_TYPE = 0;
 static const float FILTER_DEFAULT_WARPSHARP_DEPTH = 16.0f;
 static const int   FILTER_DEFAULT_WARPSHARP_CHROMA = 0;
 
+static const float FILTER_DEFAULT_DETAILSHARPEN_Z = 4.0f;
+static const float FILTER_DEFAULT_DETAILSHARPEN_SSTR = 1.5f;
+static const float FILTER_DEFAULT_DETAILSHARPEN_POWER = 4.0f;
+static const float FILTER_DEFAULT_DETAILSHARPEN_LDMP = 1.0f;
+static const int   FILTER_DEFAULT_DETAILSHARPEN_MODE = 1;
+static const bool  FILTER_DEFAULT_DETAILSHARPEN_MED = false;
+
 static const int   FILTER_DEFAULT_DEBAND_RANGE = 15;
 static const int   FILTER_DEFAULT_DEBAND_THRE_Y = 15;
 static const int   FILTER_DEFAULT_DEBAND_THRE_CB = 15;
@@ -439,6 +503,47 @@ static const int   FILTER_DEFAULT_DEBAND_MODE = 1;
 static const int   FILTER_DEFAULT_DEBAND_SEED = 1234;
 static const bool  FILTER_DEFAULT_DEBAND_BLUR_FIRST = false;
 static const bool  FILTER_DEFAULT_DEBAND_RAND_EACH_FRAME = false;
+
+static const int   FILTER_DEFAULT_DEGRAIN_BLKSIZE = 16;
+static const int   FILTER_DEFAULT_DEGRAIN_SEARCH = 4;
+static const int   FILTER_DEFAULT_DEGRAIN_THSAD = 640;
+static const int   FILTER_DEFAULT_DEGRAIN_THSCD1 = 180;
+static const int   FILTER_DEFAULT_DEGRAIN_THSCD2 = 98;
+static const int   FILTER_DEFAULT_DEGRAIN_PEL = 1;
+static const int   FILTER_DEFAULT_DEGRAIN_LEVELS = 2;
+static const int   FILTER_DEFAULT_DEGRAIN_OVERLAP = 0;
+static const int   FILTER_DEFAULT_DEGRAIN_DELTA = 1;
+static const int   FILTER_DEFAULT_DEGRAIN_TR0 = 0;
+static const int   FILTER_DEFAULT_DEGRAIN_REP0 = 0;
+static const int   FILTER_DEFAULT_DEGRAIN_SEARCH_REFINE = 0;
+static const int   FILTER_DEFAULT_DEGRAIN_SUBPEL_INTERP = 0;
+static const int   FILTER_DEFAULT_DEGRAIN_SEARCHPARAM = 2;
+static const int   FILTER_DEFAULT_DEGRAIN_PELSEARCH = 2;
+static const bool  FILTER_DEFAULT_DEGRAIN_TRUEMOTION = false;
+static const int   FILTER_DEFAULT_DEGRAIN_LAMBDA = 400;
+static const int   FILTER_DEFAULT_DEGRAIN_LSAD = 400;
+static const int   FILTER_DEFAULT_DEGRAIN_PNEW = 25;
+static const int   FILTER_DEFAULT_DEGRAIN_PLEVEL = 0;
+static const bool  FILTER_DEFAULT_DEGRAIN_GLOBALMOTION = true;
+static const int   FILTER_DEFAULT_DEGRAIN_DCT = 0;
+static const int   FILTER_DEFAULT_DEGRAIN_USEFLAG = 0;
+static const int   FILTER_DEFAULT_DEGRAIN_THSADC = FILTER_DEFAULT_DEGRAIN_THSAD;
+static const bool  FILTER_DEFAULT_DEGRAIN_CHROMA = false;
+static const int   FILTER_DEFAULT_DEGRAIN_BINOMIAL = -1; // -1:auto, 0:false, 1:true
+static const bool  FILTER_DEFAULT_DEGRAIN_TV_RANGE = false;
+static const int   FILTER_DEFAULT_DEGRAIN_MV_SPATIAL_REFINE = -1;
+static const int   FILTER_DEFAULT_RTGMC_MV_SPATIAL_REFINE = -1;
+static const float FILTER_DEFAULT_RTGMC_RETOUCH_SHARPNESS = 1.0f;
+static const float FILTER_DEFAULT_RTGMC_RETOUCH_LIMIT = 0.0f;
+static const int   FILTER_DEFAULT_RTGMC_RETOUCH_SMODE = 2;
+static const int   FILTER_DEFAULT_RTGMC_RETOUCH_SLMODE = 2;
+static const int   FILTER_DEFAULT_RTGMC_RETOUCH_SLRAD = 1;
+static const int   FILTER_DEFAULT_RTGMC_RETOUCH_SOVS = 0;
+static const float FILTER_DEFAULT_RTGMC_RETOUCH_SVTHIN = 0.0f;
+static const int   FILTER_DEFAULT_RTGMC_RETOUCH_SBB = 0;
+static const int   FILTER_DEFAULT_RTGMC_PRIMITIVE_MODE = 0;
+static const float FILTER_DEFAULT_RTGMC_PRIMITIVE_WEIGHT = 0.5f;
+static const bool  FILTER_DEFAULT_RTGMC_PRIMITIVE_CHROMA = true;
 
 struct RGYQPSet {
     bool enable;
@@ -478,6 +583,12 @@ const CX_DESC list_vpp_denoise[] = {
     { _T("smooth"),  3 },
     { _T("fft3d"), 10 },
     { _T("convolution3d"),  5 },
+#if ENABLE_VPP_FILTER_MSMOOTH
+    { _T("msmooth"), 11 },
+#endif
+#if ENABLE_VPP_FILTER_DEGRAIN
+    { _T("degrain"), 12 },
+#endif
 #if ENCODER_VCEENC
     { _T("preprocess"), 4 },
 #endif
@@ -496,6 +607,9 @@ const CX_DESC list_vpp_detail_enahance[] = {
     { _T("unsharp"),    1 },
     { _T("edgelevel"),  2 },
     { _T("warpsharp"),  3 },
+#if ENABLE_VPP_FILTER_MSHARPEN
+    { _T("msharpen"),   5 },
+#endif
     { NULL, 0 }
 };
 
@@ -914,24 +1028,21 @@ const CX_DESC list_vpp_denoise_dct_step[] = {
 };
 
 enum VppNnediField {
-    VPP_NNEDI_FIELD_UNKNOWN = 0,
-    VPP_NNEDI_FIELD_BOB_AUTO,
-    VPP_NNEDI_FIELD_USE_AUTO,
-    VPP_NNEDI_FIELD_USE_TOP,
-    VPP_NNEDI_FIELD_USE_BOTTOM,
-    VPP_NNEDI_FIELD_BOB_TOP_BOTTOM,
-    VPP_NNEDI_FIELD_BOB_BOTTOM_TOP,
-
-    VPP_NNEDI_FIELD_MAX,
+    VPP_NNEDI_FIELD_BOB = -2,
+    VPP_NNEDI_FIELD_AUTO = -1,
+    VPP_NNEDI_FIELD_BOTTOM = 0,
+    VPP_NNEDI_FIELD_TOP = 1,
+    VPP_NNEDI_FIELD_BOB_BOTTOM = 2,
+    VPP_NNEDI_FIELD_BOB_TOP = 3,
 };
 
 const CX_DESC list_vpp_nnedi_field[] = {
-    { _T("bob"),     VPP_NNEDI_FIELD_BOB_AUTO },
-    { _T("auto"),    VPP_NNEDI_FIELD_USE_AUTO },
-    { _T("top"),     VPP_NNEDI_FIELD_USE_TOP },
-    { _T("bottom"),  VPP_NNEDI_FIELD_USE_BOTTOM },
-    { _T("bob_tff"), VPP_NNEDI_FIELD_BOB_TOP_BOTTOM },
-    { _T("bob_bff"), VPP_NNEDI_FIELD_BOB_BOTTOM_TOP },
+    { _T("bob"),        VPP_NNEDI_FIELD_BOB },
+    { _T("auto"),       VPP_NNEDI_FIELD_AUTO },
+    { _T("top"),        VPP_NNEDI_FIELD_TOP },
+    { _T("bottom"),     VPP_NNEDI_FIELD_BOTTOM },
+    { _T("bob_tff"),    VPP_NNEDI_FIELD_BOB_TOP },
+    { _T("bob_bff"),    VPP_NNEDI_FIELD_BOB_BOTTOM },
     { NULL, 0 }
 };
 
@@ -980,50 +1091,6 @@ enum VppNnediQuality {
 const CX_DESC list_vpp_nnedi_quality[] = {
     { _T("fast"), VPP_NNEDI_QUALITY_FAST },
     { _T("slow"), VPP_NNEDI_QUALITY_SLOW },
-    { NULL, 0 }
-};
-
-enum VppNnediPreScreen : uint32_t {
-    VPP_NNEDI_PRE_SCREEN_NONE            = 0x00,
-    VPP_NNEDI_PRE_SCREEN_ORIGINAL        = 0x01,
-    VPP_NNEDI_PRE_SCREEN_NEW             = 0x02,
-    VPP_NNEDI_PRE_SCREEN_MODE            = 0x07,
-    VPP_NNEDI_PRE_SCREEN_BLOCK           = 0x10,
-    VPP_NNEDI_PRE_SCREEN_ONLY            = 0x20,
-    VPP_NNEDI_PRE_SCREEN_ORIGINAL_BLOCK  = VPP_NNEDI_PRE_SCREEN_ORIGINAL | VPP_NNEDI_PRE_SCREEN_BLOCK,
-    VPP_NNEDI_PRE_SCREEN_NEW_BLOCK       = VPP_NNEDI_PRE_SCREEN_NEW      | VPP_NNEDI_PRE_SCREEN_BLOCK,
-    VPP_NNEDI_PRE_SCREEN_ORIGINAL_ONLY   = VPP_NNEDI_PRE_SCREEN_ORIGINAL | VPP_NNEDI_PRE_SCREEN_ONLY,
-    VPP_NNEDI_PRE_SCREEN_NEW_ONLY        = VPP_NNEDI_PRE_SCREEN_NEW      | VPP_NNEDI_PRE_SCREEN_ONLY,
-
-    VPP_NNEDI_PRE_SCREEN_MAX,
-};
-
-static VppNnediPreScreen operator|(VppNnediPreScreen a, VppNnediPreScreen b) {
-    return (VppNnediPreScreen)((uint32_t)a | (uint32_t)b);
-}
-
-static VppNnediPreScreen operator|=(VppNnediPreScreen& a, VppNnediPreScreen b) {
-    a = a | b;
-    return a;
-}
-
-static VppNnediPreScreen operator&(VppNnediPreScreen a, VppNnediPreScreen b) {
-    return (VppNnediPreScreen)((uint32_t)a & (uint32_t)b);
-}
-
-static VppNnediPreScreen operator&=(VppNnediPreScreen& a, VppNnediPreScreen b) {
-    a = (VppNnediPreScreen)((uint32_t)a & (uint32_t)b);
-    return a;
-}
-
-const CX_DESC list_vpp_nnedi_pre_screen[] = {
-    { _T("none"),           VPP_NNEDI_PRE_SCREEN_NONE },
-    { _T("original"),       VPP_NNEDI_PRE_SCREEN_ORIGINAL },
-    { _T("new"),            VPP_NNEDI_PRE_SCREEN_NEW },
-    { _T("original_block"), VPP_NNEDI_PRE_SCREEN_ORIGINAL_BLOCK },
-    { _T("new_block"),      VPP_NNEDI_PRE_SCREEN_NEW_BLOCK },
-    { _T("original_only"),  VPP_NNEDI_PRE_SCREEN_ORIGINAL_ONLY },
-    { _T("new_only"),       VPP_NNEDI_PRE_SCREEN_NEW_ONLY },
     { NULL, 0 }
 };
 
@@ -1398,7 +1465,7 @@ enum class VppLibplaceboToneMappingTransfer {
     HLG,
     VLog,
     SLog1,
-    SLog2,  
+    SLog2,
 };
 
 const CX_DESC list_vpp_libplacebo_tone_mapping_transfer[] = {
@@ -1837,15 +1904,15 @@ struct VppDecomb {
 struct VppNnedi {
     bool              enable;
     VppNnediField     field;
-    int               nns;
     VppNnediNSize     nsize;
+    int               nns;
     VppNnediQuality   quality;
-    VppFpPrecision precision;
-    VppNnediPreScreen pre_screen;
+    int               prescreen;
     VppNnediErrorType errortype;
+    int               clamp;
+    bool              doubleHeight;
     tstring           weightfile;
 
-    bool isbob();
     VppNnedi();
     bool operator==(const VppNnedi &x) const;
     bool operator!=(const VppNnedi &x) const;
@@ -1887,6 +1954,116 @@ struct VppDecimate {
     VppDecimate();
     bool operator==(const VppDecimate &x) const;
     bool operator!=(const VppDecimate &x) const;
+    tstring print() const;
+};
+
+enum class VppBwdifMode {
+    Frame,  // same-rate output: 1 output frame per input
+    Bob,    // double-rate output: 2 output frames per input
+};
+
+const CX_DESC list_vpp_bwdif_mode[] = {
+    { _T("frame"),  (int)VppBwdifMode::Frame },
+    { _T("bob"),    (int)VppBwdifMode::Bob   },
+    { NULL, 0 }
+};
+
+enum class VppBwdifOrder {
+    Auto = -1,
+    BFF = 0,
+    TFF = 1
+};
+
+const CX_DESC list_vpp_bwdif_order[] = {
+    { _T("auto"),   (int)VppBwdifOrder::Auto },
+    { _T("tff"),    (int)VppBwdifOrder::TFF  },
+    { _T("bff"),    (int)VppBwdifOrder::BFF  },
+    { NULL, 0 }
+};
+
+enum class VppBwdifDeint {
+    All,         // deinterlace every frame
+    Interlaced,  // only frames with RGY_PICSTRUCT_INTERLACED; progressive passes through
+};
+
+struct VppBwdif {
+    bool enable;
+    VppBwdifMode mode;    // Frame = same-rate (1 out/in); Bob = double-rate (2 out/in)
+    VppBwdifOrder order;  // Auto = from input picstruct
+    float thr;            // noise threshold, 0.0..100.0 (% of value range); motion <= thr -> temporal avg
+    VppBwdifDeint deint;  // gate: All (default) or Interlaced only
+    bool log;             // enable per-frame TSV log
+    tstring logPath;      // file path; empty = log to stdout via AddMessage DEBUG
+
+    bool isbob() const { return mode == VppBwdifMode::Bob; }
+
+    VppBwdif();
+    bool operator==(const VppBwdif &x) const;
+    bool operator!=(const VppBwdif &x) const;
+    tstring print() const;
+};
+
+struct VppIvtc {
+    bool enable;
+    int tff;              // -1=auto, 0=BFF, 1=TFF
+    int guide;            // 0=min-combing, 1=2-way + combed-override, 2=PAL 2:2
+    int post;             // 0=off, 2=adaptive per-pixel vertical blend
+    int cycle;            // -1=auto, 0=off, 2..16 (5 = NTSC 3:2, 2 = PAL 2:2)
+    int drop;             // 1 supported
+    float combThresh;     // 0..1 per-pixel combing threshold
+    float cleanFrac;      // 0..1 fraction of frame pixels allowed combed while still "clean"
+    int dthresh;          // per-pixel deinterlace threshold (0..255 on 8-bit; scaled to bit depth).
+                          //   Only missing-field pixels whose |cur - (cur[iy-1]+cur[iy+1])/2|
+                          //   exceeds dthresh get replaced by the BWDIF / SP-cubic reconstruction;
+                          //   clean pixels pass through unchanged. 0 disables the gate (legacy behaviour).
+    bool chroma;          // include U+V planes in match-quality scoring (luma-only by default).
+                          //   chromaBlend = (scoreU + scoreV) >> 2 added to luma score.
+    int back;             // 0 = always test P; 1 = only test P when current appears combed
+    int y0;               // exclusion band: inclusive top row (0 = no band)
+    int y1;               // exclusion band: inclusive bottom row (0 = no band)
+    int cadenceLock;      // 5-frame cadence tracker + pattern-predicted match override.
+                          //   -1 = auto (enable when guide >= 1), 0 = off, 1 = on.
+                          //   Auto-mode fires when guide mode is active because
+                          //   the tracker only produces useful predictions when
+                          //   a pulldown pattern is present (guide=1 NTSC 3:2 or
+                          //   guide=2 PAL 2:2). Default -1 (auto).
+    int gthresh;          // 0..100 percentage: tolerance for cadence-predicted match override.
+                          //   Predicted match wins over argmin only if |predicted_score -
+                          //   argmin_score| / predicted_score < gthresh%. Default 10.
+                          //   0 disables override (cadence is diagnostic-only).
+    int expand;           // RFF-based internal expansion (DGDecode-equivalent).
+                          //   -1 = auto (enable when guide>=1 && inputBPulldownDetected),
+                          //   0  = off (default behaviour, 24fps coded in → 24fps out),
+                          //   1  = on (expand 4 coded → 5 ring entries per 3:2 cycle,
+                          //            force cycle=5 drop=1 decimation internally;
+                          //            external baseFps unchanged).
+                          //   Algorithm: follows DGDecode vfapidec.cpp:682-709.
+                          //   After current coded frame is pushed to the ring, if it
+                          //   carried RFF, an additional "display frame" is synthesised
+                          //   by overlaying the previous coded frame's complementary
+                          //   field (CopyBot for TFF, CopyTop for BFF — stride*2 blit).
+    int mixed;            // RFF/progressive + interlaced mixed mode.
+                          //   0 = off, 1 = on. When enabled, RFF frames are
+                          //   field-reconstructed and interlaced sections are IVTC'd.
+    int vthresh;          // post-assembly combing veto threshold (TFM vmetric analogue,
+                          //   Telecide.cpp:376-397). Layered ON TOP of the picstruct-class
+                          //   applyBlend gate (mislabeled/unknownCombed/progressiveCombed/
+                          //   strongMatch): if the gate says "blend" but the chosen
+                          //   candidate's post-assembly cComb < vthresh, blend is vetoed.
+                          //   Because scoreCandidates already measures cComb on assembled
+                          //   field pairs (see rgy_filter_ivtc.cl pix_match), chosenCombScore
+                          //   IS the post-assembly metric — no separate re-scoring needed.
+                          //   Default 50 — deliberately below combThreshProg (65) so the
+                          //   veto only removes clearly-clean frames that slipped through
+                          //   the strongMatch branch, never frames caught by the cComb-
+                          //   gated branches. 0 disables the veto.
+    float hysteresis;     // 0..1 bias against match-type flipping between frames
+    bool log;
+    tstring logPath;
+
+    VppIvtc();
+    bool operator==(const VppIvtc &x) const;
+    bool operator!=(const VppIvtc &x) const;
     tstring print() const;
 };
 
@@ -1987,6 +2164,7 @@ struct VppNLMeans {
     float h;
     VppNLMeansFP16Opt fp16;
     bool sharedMem;
+    bool processChroma;
 
     VppNLMeans();
     bool operator==(const VppNLMeans &x) const;
@@ -2141,6 +2319,67 @@ struct VppWarpsharp {
     VppWarpsharp();
     bool operator==(const VppWarpsharp& x) const;
     bool operator!=(const VppWarpsharp& x) const;
+    tstring print() const;
+};
+
+struct VppDetailSharpen {
+    bool  enable;
+    float z;
+    float sstr;
+    float power;
+    float ldmp;
+    int   mode;
+    bool  med;
+
+    VppDetailSharpen();
+    bool operator==(const VppDetailSharpen &x) const;
+    bool operator!=(const VppDetailSharpen &x) const;
+    tstring print() const;
+};
+
+enum class VppSoftLightMode {
+    NEUTRALIZE,
+    LIGHTNESS,
+    NEUTRALIZE_BOOST_SAT,
+    NEUTRALIZE_FULL,
+    NEUTRALIZE_BOOST,
+    BOOST,
+    SATURATION,
+};
+
+const CX_DESC list_vpp_softlight_mode[] = {
+    { _T("neutralize"),           (int)VppSoftLightMode::NEUTRALIZE },
+    { _T("lightness"),            (int)VppSoftLightMode::LIGHTNESS },
+    { _T("neutralize_boost_sat"), (int)VppSoftLightMode::NEUTRALIZE_BOOST_SAT },
+    { _T("neutralize_full"),      (int)VppSoftLightMode::NEUTRALIZE_FULL },
+    { _T("neutralize_boost"),     (int)VppSoftLightMode::NEUTRALIZE_BOOST },
+    { _T("boost"),                (int)VppSoftLightMode::BOOST },
+    { _T("saturation"),           (int)VppSoftLightMode::SATURATION },
+    { NULL, 0 }
+};
+
+enum class VppSoftLightFormula {
+    PEGTOP,
+    ILLUSIONSHU,
+    W3C,
+};
+
+const CX_DESC list_vpp_softlight_formula[] = {
+    { _T("pegtop"),      (int)VppSoftLightFormula::PEGTOP },
+    { _T("illusionshu"), (int)VppSoftLightFormula::ILLUSIONSHU },
+    { _T("w3c"),         (int)VppSoftLightFormula::W3C },
+    { NULL, 0 }
+};
+
+struct VppSoftLight {
+    bool enable;
+    VppSoftLightMode mode;
+    VppSoftLightFormula formula;
+    bool skipblack;
+
+    VppSoftLight();
+    bool operator==(const VppSoftLight& x) const;
+    bool operator!=(const VppSoftLight& x) const;
     tstring print() const;
 };
 
@@ -2319,18 +2558,499 @@ struct VppFruc {
     tstring print() const;
 };
 
+enum class VppDegrainMode {
+    Source,
+    Analyze,
+    MotionBack,
+    MotionForw,
+    MotionBack2,
+    MotionForw2,
+    Degrain,
+    MV,
+    SAD,
+};
+
+const CX_DESC list_vpp_degrain_mode[] = {
+    { _T("source"),      (int)VppDegrainMode::Source      },
+    { _T("analyze"),     (int)VppDegrainMode::Analyze     },
+    { _T("compb"),       (int)VppDegrainMode::MotionBack  },
+    { _T("compf"),       (int)VppDegrainMode::MotionForw  },
+    { _T("compb2"),      (int)VppDegrainMode::MotionBack2 },
+    { _T("compf2"),      (int)VppDegrainMode::MotionForw2 },
+    { _T("degrain"),     (int)VppDegrainMode::Degrain     },
+    { _T("mv"),          (int)VppDegrainMode::MV          },
+    { _T("sad"),         (int)VppDegrainMode::SAD         },
+    { NULL, 0 }
+};
+
+static const auto FILTER_DEFAULT_DEGRAIN_MODE = VppDegrainMode::Degrain;
+
+enum class VppDegrainPreset {
+    Custom,
+    Auto,
+};
+
+const CX_DESC list_vpp_degrain_preset[] = {
+    { _T("custom"), (int)VppDegrainPreset::Custom },
+    { _T("auto"),   (int)VppDegrainPreset::Auto   },
+    { NULL, 0 }
+};
+
+enum class VppDegrainStage {
+    Auto,
+    TR1,
+    TR2,
+};
+
+const CX_DESC list_vpp_degrain_stage[] = {
+    { _T("auto"), (int)VppDegrainStage::Auto },
+    { _T("tr1"),  (int)VppDegrainStage::TR1  },
+    { _T("tr2"),  (int)VppDegrainStage::TR2  },
+    { NULL, 0 }
+};
+
+struct VppDegrain {
+    bool enable;
+    VppDegrainPreset preset;
+    VppDegrainMode mode;
+    VppDegrainStage stage;
+    int blksize;
+    int search;
+    int thsad;
+    int thscd1;
+    int thscd2;
+    int pel;
+    int levels;
+    int overlap;
+    int delta;
+    int tr0;
+    int rep0;
+    int searchRefine;
+    int subpelInterp;
+    int searchParam;
+    int pelSearch;
+    bool trueMotion;
+    int lambda;
+    int lsad;
+    int pnew;
+    int plevel;
+    bool globalMotion;
+    int dct;
+    int useFlag;
+    int thsadc;
+    bool chroma;
+    int binomial;
+    bool tvRange;
+    int mvSpatialRefine;
+
+    VppDegrain();
+    bool operator==(const VppDegrain &x) const;
+    bool operator!=(const VppDegrain &x) const;
+    tstring print() const;
+};
+
+enum class VppRtgmcBobOrder {
+    Auto = -1,
+    BFF = 0,
+    TFF = 1
+};
+
+const CX_DESC list_vpp_rtgmc_bob_order[] = {
+    { _T("auto"),   (int)VppRtgmcBobOrder::Auto },
+    { _T("tff"),    (int)VppRtgmcBobOrder::TFF  },
+    { _T("bff"),    (int)VppRtgmcBobOrder::BFF  },
+    { NULL, 0 }
+};
+
+enum class VppRtgmcPreset {
+    Placebo = 0,
+    VerySlow,
+    Slower,
+    Slow,
+    Medium,
+    Fast,
+    Faster,
+    VeryFast,
+    SuperFast,
+    UltraFast,
+    Draft,
+};
+
+const CX_DESC list_vpp_rtgmc_preset[] = {
+    { _T("slower"),     (int)VppRtgmcPreset::Slower    },
+    { _T("slow"),       (int)VppRtgmcPreset::Slow      },
+    { _T("medium"),     (int)VppRtgmcPreset::Medium    },
+    { _T("fast"),       (int)VppRtgmcPreset::Fast      },
+    { _T("faster"),     (int)VppRtgmcPreset::Faster    },
+    { _T("veryfast"),   (int)VppRtgmcPreset::VeryFast  },
+    { _T("superfast"),  (int)VppRtgmcPreset::SuperFast },
+    { _T("ultrafast"),  (int)VppRtgmcPreset::UltraFast },
+    { _T("draft"),      (int)VppRtgmcPreset::Draft     },
+    { NULL, 0 }
+};
+
+enum class VppRtgmcTuning {
+    None = 0,
+    DVSD,
+    DVHD,
+};
+
+const CX_DESC list_vpp_rtgmc_tuning[] = {
+    { _T("none"),  (int)VppRtgmcTuning::None },
+    { _T("dv-sd"), (int)VppRtgmcTuning::DVSD },
+    { _T("dv-hd"), (int)VppRtgmcTuning::DVHD },
+    { NULL, 0 }
+};
+
+struct VppRtgmcBob {
+    bool enable;
+    VppRtgmcBobOrder order;
+
+    VppRtgmcBob();
+    bool operator==(const VppRtgmcBob& x) const;
+    bool operator!=(const VppRtgmcBob& x) const;
+    tstring print() const;
+};
+
+struct VppRtgmcSearchPrefilter {
+    bool enable;
+    int tr0;
+    int rep0Thin;
+    int rep0Pad;
+    int searchRefine;
+    bool tvRange;
+    bool chromaMotion;
+    tstring dumpY4m;
+    tstring dumpStage;
+    int dumpMaxFrames;
+
+    VppRtgmcSearchPrefilter();
+    bool operator==(const VppRtgmcSearchPrefilter& x) const;
+    bool operator!=(const VppRtgmcSearchPrefilter& x) const;
+    tstring print() const;
+};
+
+enum class VppRtgmcNoiseDenoiser {
+    NLMeans,
+    FFT3D,
+};
+
+const CX_DESC list_vpp_rtgmc_noise_denoiser[] = {
+    { _T("nlmeans"),     (int)VppRtgmcNoiseDenoiser::NLMeans     },
+    { _T("fft3d"),       (int)VppRtgmcNoiseDenoiser::FFT3D       },
+    { NULL, 0 }
+};
+
+enum class VppRtgmcNoiseDeint {
+    None,
+    Bob,
+    Generate,
+};
+
+const CX_DESC list_vpp_rtgmc_noise_deint[] = {
+    { _T("none"),     (int)VppRtgmcNoiseDeint::None     },
+    { _T("bob"),      (int)VppRtgmcNoiseDeint::Bob      },
+    { _T("generate"), (int)VppRtgmcNoiseDeint::Generate },
+    { NULL, 0 }
+};
+
+struct VppRtgmcNoise {
+    int noiseProcess;
+    float ezDenoise;
+    float ezKeepGrain;
+    VppRtgmcNoiseDenoiser denoiser;
+    VppRtgmcNoiseDeint noiseDeint;
+    float sigma;
+    bool chromaNoise;
+    bool denoiseMC;
+    int noiseTR;
+    float grainRestore;
+    float noiseRestore;
+
+    VppRtgmcNoise();
+    bool operator==(const VppRtgmcNoise& x) const;
+    bool operator!=(const VppRtgmcNoise& x) const;
+    tstring print() const;
+};
+
+enum class VppRtgmcEdiMode {
+    Passthrough = 0,
+    Bob = 1,
+    BobChromaMerge = Bob,
+    Yadif = 2,
+    cYadif = 3,
+    TDeint = 4,
+    RepYadif = 5,
+    RepcYadif = 6,
+    NNEDI3 = 7,
+};
+
+enum class VppRtgmcChromaEdiMode {
+    None = 0,
+    NNEDI3 = 1,
+};
+
+const CX_DESC list_vpp_rtgmc_edi_mode[] = {
+    { _T("passthrough"),      (int)VppRtgmcEdiMode::Passthrough },
+    { _T("bob"),              (int)VppRtgmcEdiMode::Bob         },
+    { _T("yadif"),            (int)VppRtgmcEdiMode::Yadif       },
+    { _T("cyadif"),           (int)VppRtgmcEdiMode::cYadif      },
+    { _T("repyadif"),         (int)VppRtgmcEdiMode::RepYadif    },
+    { _T("repcyadif"),        (int)VppRtgmcEdiMode::RepcYadif   },
+    { _T("nnedi3"),           (int)VppRtgmcEdiMode::NNEDI3      },
+    { NULL, 0 }
+};
+
+const CX_DESC list_vpp_rtgmc_chroma_edi_mode[] = {
+    { _T("none"),             (int)VppRtgmcChromaEdiMode::None   },
+    { _T("nnedi3"),           (int)VppRtgmcChromaEdiMode::NNEDI3 },
+    { NULL, 0 }
+};
+
+struct VppRtgmcEdi {
+    bool enable;
+    VppRtgmcEdiMode mode;
+    VppRtgmcChromaEdiMode chromaEdi;
+    int nnsize;
+    int nneurons;
+    int ediqual;
+
+    VppRtgmcEdi();
+    bool operator==(const VppRtgmcEdi& x) const;
+    bool operator!=(const VppRtgmcEdi& x) const;
+    tstring print() const;
+};
+
+struct VppRtgmcRetouch {
+    bool enable;
+    float sharpness;
+    float limit;
+    int smode;
+    int slmode;
+    int slrad;
+    int sovs;
+    float svthin;
+    int sbb;
+    bool precise;
+    int tr1;
+    int tr2;
+
+    VppRtgmcRetouch();
+    bool operator==(const VppRtgmcRetouch& x) const;
+    bool operator!=(const VppRtgmcRetouch& x) const;
+    tstring print() const;
+};
+
+enum class VppRtgmcShimmerRepairStage {
+    Rep1 = 0,
+    Rep2 = 1,
+};
+
+const CX_DESC list_vpp_rtgmc_shimmer_repair_stage[] = {
+    { _T("rep1"), (int)VppRtgmcShimmerRepairStage::Rep1 },
+    { _T("rep2"), (int)VppRtgmcShimmerRepairStage::Rep2 },
+    { NULL, 0 }
+};
+
+struct VppRtgmcShimmerRepair {
+    bool enable;
+    VppRtgmcShimmerRepairStage stage;
+    int repThin;
+    int repPad;
+    bool repChroma;
+
+    VppRtgmcShimmerRepair();
+    bool operator==(const VppRtgmcShimmerRepair& x) const;
+    bool operator!=(const VppRtgmcShimmerRepair& x) const;
+    tstring print() const;
+};
+
+enum class VppRtgmcPrimitiveOp {
+    Copy = 0,
+    MakeDiff,
+    AddDiff,
+    AddWeightedDiff,
+    RemoveGrain,
+    Repair,
+    Merge,
+    GaussResize,
+    VerticalMin5,
+    VerticalMax5,
+    LogicMin,
+    LogicMax,
+};
+
+const CX_DESC list_vpp_rtgmc_primitive_op[] = {
+    { _T("copy"),        (int)VppRtgmcPrimitiveOp::Copy },
+    { _T("makediff"),    (int)VppRtgmcPrimitiveOp::MakeDiff },
+    { _T("adddiff"),     (int)VppRtgmcPrimitiveOp::AddDiff },
+    { _T("addweighteddiff"), (int)VppRtgmcPrimitiveOp::AddWeightedDiff },
+    { _T("removegrain"), (int)VppRtgmcPrimitiveOp::RemoveGrain },
+    { _T("repair"),      (int)VppRtgmcPrimitiveOp::Repair },
+    { _T("merge"),       (int)VppRtgmcPrimitiveOp::Merge },
+    { _T("gaussresize"), (int)VppRtgmcPrimitiveOp::GaussResize },
+    { _T("verticalmin5"), (int)VppRtgmcPrimitiveOp::VerticalMin5 },
+    { _T("verticalmax5"), (int)VppRtgmcPrimitiveOp::VerticalMax5 },
+    { _T("logicmin"),    (int)VppRtgmcPrimitiveOp::LogicMin },
+    { _T("logicmax"),    (int)VppRtgmcPrimitiveOp::LogicMax },
+    { NULL, 0 }
+};
+
+enum class VppRtgmcPrimitiveRef {
+    Disabled = 0,
+    RemoveGrain20,
+};
+
+const CX_DESC list_vpp_rtgmc_primitive_ref[] = {
+    { _T("none"),          (int)VppRtgmcPrimitiveRef::Disabled },
+    { _T("removegrain20"), (int)VppRtgmcPrimitiveRef::RemoveGrain20 },
+    { NULL, 0 }
+};
+
+struct VppRtgmcPrimitive {
+    bool enable;
+    VppRtgmcPrimitiveOp op;
+    VppRtgmcPrimitiveRef ref;
+    int mode;
+    float weight;
+    bool chroma;
+
+    VppRtgmcPrimitive();
+    bool operator==(const VppRtgmcPrimitive& x) const;
+    bool operator!=(const VppRtgmcPrimitive& x) const;
+    tstring print() const;
+};
+
+struct VppRtgmc {
+    bool enable;
+    VppRtgmcPreset preset;
+    VppRtgmcTuning tuning;
+    bool border;
+    int lossless;
+    int inputType;
+    float progSADMask;
+    float progSADMaskGamma;
+    int mvSpatialRefine;
+    int sourceMatch;
+    int matchTR1;
+    int matchTR2;
+    float matchEnhance;
+    VppRtgmcBob bob;
+    VppRtgmcSearchPrefilter searchPrefilter;
+    VppDegrain analyze;
+    VppRtgmcNoise noise;
+    VppRtgmcEdi edi;
+    VppRtgmcEdi matchEdi;
+    VppDegrain tr1;
+    VppRtgmcShimmerRepair rep1;
+    VppRtgmcRetouch retouch;
+    VppDegrain tr2;
+    VppRtgmcShimmerRepair rep2;
+
+    VppRtgmc();
+    bool operator==(const VppRtgmc& x) const;
+    bool operator!=(const VppRtgmc& x) const;
+    tstring print() const;
+};
+
+void apply_vpp_rtgmc_preset(VppRtgmc& rtgmc, VppRtgmcPreset preset, VppRtgmcTuning tuning);
+
+enum class VppKfmMode {
+    VFR,
+    P60,
+    P24,
+};
+const CX_DESC list_vpp_kfm_mode[] = {
+    { _T("vfr"),   (int)VppKfmMode::VFR },
+    { _T("60"),    (int)VppKfmMode::P60 },
+    { _T("24"),    (int)VppKfmMode::P24 },
+    { nullptr, 0 }
+};
+
+enum class VppKfmTiming {
+    Realtime,
+    RealtimePlus,
+    Strict,
+};
+const CX_DESC list_vpp_kfm_timing[] = {
+    { _T("realtime"),  (int)VppKfmTiming::Realtime },
+    { _T("realtime+"), (int)VppKfmTiming::RealtimePlus },
+    { _T("strict"),    (int)VppKfmTiming::Strict },
+    { nullptr, 0 }
+};
+
+enum class VppKfmDebugStage {
+    None,
+    SwitchFlag,
+    ContainsCombe,
+    CombeMask,
+};
+const CX_DESC list_vpp_kfm_debug_stage[] = {
+    { _T("none"),           (int)VppKfmDebugStage::None },
+    { _T("switch-flag"),    (int)VppKfmDebugStage::SwitchFlag },
+    { _T("switch-flag-min"), (int)VppKfmDebugStage::SwitchFlag },
+    { _T("contains-combe"), (int)VppKfmDebugStage::ContainsCombe },
+    { _T("combe-mask"),     (int)VppKfmDebugStage::CombeMask },
+    { _T("combe-mask-min"), (int)VppKfmDebugStage::CombeMask },
+    { nullptr, 0 }
+};
+
+struct VppKfm {
+    bool enable;
+    VppKfmMode mode;
+    VppRtgmcPreset preset;
+    VppKfmTiming timing;
+    int pastCycles;
+    float thswitch;
+    bool ucf;
+    bool nr;
+    bool is120;
+    bool debug;
+    VppKfmDebugStage debugStage;
+    tstring timecode;
+
+    VppKfm();
+    bool operator==(const VppKfm& x) const;
+    bool operator!=(const VppKfm& x) const;
+    tstring print() const;
+};
+
+enum class VppDeintCsp {
+    Input,
+    Output,
+};
+
+extern const CX_DESC list_vpp_deint_csp[];
+
 struct RGYParamVpp {
     std::vector<VppType> filterOrder;
     RGY_VPP_RESIZE_ALGO resize_algo;
     RGY_VPP_RESIZE_MODE resize_mode;
+    VppDeintCsp deintCsp;
     VppLibplaceboResample resize_libplacebo;
     VppColorspace colorspace;
     VppLibplaceboToneMapping libplacebo_tonemapping;
     VppDelogo delogo;
     VppAfs afs;
     VppNnedi nnedi;
+    VppBwdif bwdif;
+    VppRtgmc rtgmc;
+    VppRtgmcBob rtgmc_bob;
+    VppRtgmcSearchPrefilter rtgmc_search_prefilter;
+    VppRtgmcEdi rtgmc_edi;
+    VppKfm kfm;
     VppYadif yadif;
     VppDecomb decomb;
+    VppDegrain degrain;
+    VppDegrain degrainAnalyze;
+    VppDegrain degrainTR1;
+    VppDegrain degrainTR2;
+    VppRtgmcRetouch rtgmc_retouch;
+    VppRtgmcShimmerRepair rtgmc_shimmer_repair;
+    VppRtgmcShimmerRepair rtgmc_shimmer_repairRep1;
+    VppRtgmcShimmerRepair rtgmc_shimmer_repairRep2;
+    VppRtgmcPrimitive rtgmc_primitive;
+    VppIvtc ivtc;
     VppRff rff;
     VppSelectEvery selectevery;
     VppDecimate decimate;
@@ -2350,7 +3070,9 @@ struct RGYParamVpp {
     VppEdgelevel edgelevel;
     VppMsharpen msharpen;
     VppWarpsharp warpsharp;
+    VppDetailSharpen detailsharpen;
     VppCurves curves;
+    VppSoftLight softlight;
     VppTweak tweak;
     VppTransform transform;
     VppDeband deband;

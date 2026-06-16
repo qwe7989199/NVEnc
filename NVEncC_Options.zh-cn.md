@@ -189,8 +189,10 @@
     - [--vpp-delogo \<string\>\[,\<param1\>=\<value1\>\]\[,\<param2\>=\<value2\>\],...](#--vpp-delogo-stringparam1value1param2value2)
     - [--vpp-rff](#--vpp-rff)
     - [--vpp-deinterlace \<string\>](#--vpp-deinterlace-string)
+    - [--vpp-deint-csp \<string\>](#--vpp-deint-csp-string)
     - [--vpp-afs \[\<param1\>=\<value1\>\]\[,\<param2\>=\<value2\>\],...](#--vpp-afs-param1value1param2value2)
     - [--vpp-nnedi \[\<param1\>=\<value1\>\]\[,\<param2\>=\<value2\>\],...](#--vpp-nnedi-param1value1param2value2)
+    - [--vpp-kfm \[\<param1\>=\<value1\>\[,\<param2\>=\<value2\>\]...\]](#--vpp-kfm-param1value1param2value2)
     - [--vpp-yadif \[\<param1\>=\<value1\>\]](#--vpp-yadif-param1value1)
     - [--vpp-decimate \[\<param1\>=\<value1\>\]\[,\<param2\>=\<value2\>\],...](#--vpp-decimate-param1value1param2value2)
     - [--vpp-mpdecimate \[\<param1\>=\<value1\>\]\[,\<param2\>=\<value2\>\],...](#--vpp-mpdecimate-param1value1param2value2)
@@ -202,6 +204,7 @@
     - [--vpp-nvvfx-artifact-reduction \[\<param1\>=\<value1\>\]\[,\<param2\>=\<value2\>\],...](#--vpp-nvvfx-artifact-reduction-param1value1param2value2)
     - [--vpp-smooth \[\<param1\>=\<value1\>\]\[,\<param2\>=\<value2\>\],...](#--vpp-smooth-param1value1param2value2)
     - [--vpp-denoise-dct \[\<param1\>=\<value1\>\]\[,\<param2\>=\<value2\>\],...](#--vpp-denoise-dct-param1value1param2value2)
+    - [--vpp-degrain \[\<param1\>=\<value1\>\]](#--vpp-degrain-param1value1)
     - [--vpp-knn \[\<param1\>=\<value1\>\]\[,\<param2\>=\<value2\>\],...](#--vpp-knn-param1value1param2value2)
     - [--vpp-pmd \[\<param1\>=\<value1\>\]\[,\<param2\>=\<value2\>\],...](#--vpp-pmd-param1value1param2value2)
     - [--vpp-gauss \<int\>](#--vpp-gauss-int)
@@ -577,7 +580,7 @@ auto, lane8, lane16, dual, wide
 默认选择为 QVBR （固定质量）。
 
 ### --qvbr  &lt;float&gt;
-以固定质量模式编码 (0.0-51.0, 0 = 自动)
+以固定质量模式编码 (0.0-51.0, AV1为0.0-63.0, 0 = 自动)
 
 等效于 --vbr 0 --vbr-quality &lt;float&gt;.
 
@@ -670,7 +673,7 @@ P1为最快，P7为质量最高
 
 ### --vbr-quality &lt;float&gt;
 
-当使用 VBR 模式时设置输出质量。 (0.0-51.0, 0 表示自动)
+当使用 VBR 模式时设置输出质量。 (0.0-51.0, AV1为0.0-63.0, 0 表示自动)
 
 ### --dynamic-rc &lt;int&gt;:&lt;int&gt;:&lt;int&gt;&lt;int&gt;,&lt;param1&gt;=&lt;value1&gt;[,&lt;param2&gt;=&lt;value2&gt;],...  
 改变"开始帧编号:结束帧编号"之间使用的码率控制方法。可以指定的参数有码率控制方法、最大码率和目标质量（vbr-quality）。
@@ -680,10 +683,11 @@ P1为最快，P7为质量最高
 - [cqp](./NVEncC_Options.zh-cn.md#--cqp-int-or-intintint)=&lt;int&gt; or cqp=&lt;int&gt;:&lt;int&gt;:&lt;int&gt;  
 - [cbr](./NVEncC_Options.zh-cn.md#--cbr-int)=&lt;int&gt;   
 - [vbr](./NVEncC_Options.zh-cn.md#--vbr-int)=&lt;int&gt;   
+- [qvbr](./NVEncC_Options.zh-cn.md#--qvbr-float)=&lt;float&gt; (0.0-51.0, AV1为0.0-63.0, 0 = 自动)
 
 **追加参数**
 - [max-bitrate](./NVEncC_Options.zh-cn.md#--max-bitrate-int)=&lt;int&gt;  
-- [vbr-quality](./NVEncC_Options.zh-cn.md#--vbr-quality-float)=&lt;float&gt;  
+- [vbr-quality](./NVEncC_Options.zh-cn.md#--vbr-quality-float)=&lt;float&gt; (0.0-51.0, AV1为0.0-63.0, 0 表示自动)
 - [multipass](./NVEncC_Options.zh-cn.md#--multipass-string)=&lt;string&gt;  
 
 ```
@@ -1706,6 +1710,8 @@ vpp过滤器的应用顺序是固定的，与命令行的顺序无关，将按�
 - [--vpp-delogo](#--vpp-delogo-stringparam1value1param2value2)
 - [--vpp-afs](#--vpp-afs-param1value1param2value2)
 - [--vpp-nnedi](#--vpp-nnedi-param1value1param2value2)
+- [--vpp-kfm](#--vpp-kfm-param1value1param2value2)
+- [--vpp-degrain](#--vpp-degrain-param1value1) (`mode=analyze`)
 - [--vpp-yadif](#--vpp-yadif-param1value1)
 - [--vpp-decimate](#--vpp-decimate-param1value1param2value2)
 - [--vpp-mpdecimate](#--vpp-mpdecimate-param1value1param2value2)
@@ -1718,6 +1724,7 @@ vpp过滤器的应用顺序是固定的，与命令行的顺序无关，将按�
 - [--vpp-denoise-dct](#--vpp-denoise-dct-param1value1param2value2)
 - [--vpp-knn](#--vpp-knn-param1value1param2value2)
 - [--vpp-pmd](#--vpp-pmd-param1value1param2value2)
+- [--vpp-degrain](#--vpp-degrain-param1value1) (`mode=degrain` / `tr=1,2`)
 - [--vpp-gauss](#--vpp-gauss-int)
 - [--vpp-subburn](#--vpp-subburn-param1value1param2value2)
 - [--vpp-resize](#--vpp-resize-string-or-param1value1param2value2)
@@ -1908,6 +1915,17 @@ RFF（Reflect the Repeat Field）标记。可以解决由于 RFF 引发的 avsyn
 
 对于 IT(inverse telecine), 使用 [--vpp-afs](#--vpp-afs-param1value1param2value2).
 
+### --vpp-deint-csp &lt;string&gt;
+
+选择反交错滤镜使用的 CSP。默认值为 `input`。
+
+**参数**
+
+- input
+  启用 CUDA 反交错滤镜时，在输入 CSP 上运行反交错和紧密相关的滤镜。
+- output
+  在输出 CSP 上运行反交错滤镜，与以前的行为一致。
+
 ### --vpp-afs [&lt;param1&gt;=&lt;value1&gt;][,&lt;param2&gt;=&lt;value2&gt;],...
 
 激活自动场偏移（Activate Auto Field Shift, AFS）反交错。
@@ -2002,74 +2020,82 @@ RFF（Reflect the Repeat Field）标记。可以解决由于 RFF 引发的 avsyn
 --vpp-afs preset=anime,method_switch=92,thre_shift=448,24fps=true
 ```
 
-### --vpp-nnedi [&lt;param1&gt;=&lt;value1&gt;][,&lt;param2&gt;=&lt;value2&gt;],...
+### --vpp-nnedi [&lt;param1&gt;=&lt;value1&gt;[,&lt;param2&gt;=&lt;value2&gt;]...]
 
-使用 nnedi 进行反交错。丢弃其中一个场，再使用神经网络进行轮廓修正重新构建另一个场来去除交错，十分慢。
+使用 nnedi 进行反交错。
 
 **参数**
-- field  
-  去除交错的方法。
-  - auto (默认)  
-    自动选择保持不变的场
-  - top  
-    保持上场不变
-  - bottom  
-    保持下场不变
+- field=&lt;string&gt;
+  目标场选择。`bob`, `auto` (默认), `top`, `bottom`, `bob_tff`, `bob_bff`。
 
-- nns  (默认: 32)  
-  神经网络的神经元数量。
-  - 16, 32, 64, 128, 256
+- nsize=&lt;string&gt;
+  近邻区域大小。`8x6`, `16x6`, `32x6`, `48x6`, `8x4`, `16x4`, `32x4` (默认)。
 
-- nsize  (默认: 32x4)  
-  神经网络中参照的近邻区域大小。
-  - 8x6, 16x6, 32x6, 48x6, 8x4, 16x4, 32x4
+- nns=&lt;int&gt;
+  神经元数量。`16`, `32` (默认), `64`, `128`, `256`。
 
-- quality (默认: fast)  
-  设定品质。
+- quality=&lt;string&gt;
+  质量模式。`fast` (默认) 或 `slow`。
 
-  - fast
-  - slow  
-    slow即将fast的神经网络的输出，与另一神经网络的输出进行混合来提升输出质量（当然，会变得更慢）。
+- prescreen=&lt;int&gt;
+  支持 `2/3/4`。`0/1` 尚未实现。默认: `2`。
 
-- prescreen (默认: new_block)  
-  进行预处理来决定是进行简单的补间还是使用神经网络进行修正。一般来说，只有边缘附近会被作为神经网络修正的对象，降低了使用神经网络的频率使得处理速度上升。
+- errortype=&lt;string&gt;
+  误差类型。`abs` (默认) 或 `square`。
 
-  - none  
-    不进行预处理，将所有的像素使用神经网络进行重新构建。
+- clamp=&lt;int&gt;
+  裁剪范围模式。`0-4`。默认: `1`。
 
-  - original
-  - new  
-    进行预处理，在必要的地方使用神经网络进行修正。original和new在处理方式上不同，new要更快一些。
+- double_height=&lt;bool&gt;
+  输出高度加倍。仅支持 `field=auto/top/bottom`。默认: off。
 
-  - original_block
-  - new_block  
-    original/new的 GPU 优化版。不使用像素而使用区域作为判定单位。
+- weightfile=&lt;path&gt;
+  `nnedi3_weights.bin` 的路径。省略时，Windows 构建会搜索 `nnedi3_weights.bin`，Linux 构建会使用嵌入的权重。
 
-- errortype (默认: abs)  
-  选择神经网络的权重参数。
-  - abs  
-    使用训练过的权重参数让绝对误差最小。
-  - square  
-    使用训练过的权重参数让二乘误差最小。
-
-- prec (默认: auto)  
-  选择运算精度。
-  - auto  
-    当fp16可用并且使用能获得更快的速度的时候，将自动选择fp16。
-
-    当前 Turing 架构的 GPU 将会自动使用 fp16。Pascal 架构的 GPU 虽然可以使用 fp16 但是太慢了所以不会使用。
-    - fp16  
-      强制使用fp16。只适用于x64。
-    
-    - fp32  
-      强制使用fp32。
-
-- weightfile (默认: 使用内置文件)  
-  指定权重参数文件。不指定的时候将会使用内置的数据。
+**注意**
+- `prescreen=0/1` 目前未实现。
 
 ```
-示例：--vpp-nnedi field=auto,nns=64,nsize=32x6,quality=slow,prescreen=none,prec=fp32
+示例：--vpp-nnedi field=auto,nns=64,nsize=32x6,quality=slow,prescreen=2,clamp=1
 ```
+
+### --vpp-kfm [&lt;param1&gt;=&lt;value1&gt;[,&lt;param2&gt;=&lt;value2&gt;]...]
+自适应逆 Telecine 滤镜，支持 24/30/60 混合 VFR 输出。此滤镜较慢，建议在独立 GPU 上使用。
+
+**参数**
+- mode=&lt;string&gt;  
+  输出模式。`vfr` (默认), `60`, `24`。
+
+- preset=&lt;string&gt;  
+  内部 preset。`slower`, `slow`, `medium`, `fast`, `faster` (默认), `veryfast`, `superfast`, `ultrafast`, `draft`。
+
+- timing=&lt;string&gt;  
+  时间分析模式。`realtime`, `realtime+` (默认), `strict`。
+
+- past_cycles=&lt;int&gt;  
+  `realtime+` 的 commit delay cycle 数。默认: 30。
+
+- thswitch=&lt;float&gt;  
+  60p 切换阈值。默认: 0.5。
+
+- ucf=&lt;bool&gt;  
+  启用 UCF stage。默认: off。
+
+- nr=&lt;bool&gt;  
+  对最终 KFM 输出应用 degrain。默认: off。
+
+- is120=&lt;bool&gt;  
+  120fps duration 修正用保留参数。默认: on。
+
+- debug=&lt;bool&gt;  
+  指定 `timecode` 时输出 `.result.dat` / `.frameinfo.tsv` dump。默认: off。
+
+- debug_stage=&lt;string&gt;  
+  `none`, `switch-flag` (`switch-flag-min`), `contains-combe`, `combe-mask` (`combe-mask-min`)。
+  用于 24p debug 输出选择。
+
+- timecode=&lt;path&gt;  
+  timecode v2 dump path。`mode=24/vfr` 时也会输出 `*.duration.txt`。
 
 ### --vpp-yadif [&lt;param1&gt;=&lt;value1&gt;]
 使用 yadif 进行反交错。
@@ -2274,6 +2300,39 @@ RFF（Reflect the Repeat Field）标记。可以解决由于 RFF 引发的 avsyn
     - 8
     - 16 (慢)
     
+### --vpp-degrain [&lt;param1&gt;=&lt;value1&gt;]
+Motion compensated degrain debug filter.
+
+- **参数**
+  - preset=&lt;string&gt;
+    Surface preset. `custom` (默认), `auto`.
+  - mode=&lt;string&gt;
+    Output mode. `source`, `analyze`, `compb`, `compf`, `compb2`, `compf2`, `degrain` (默认), `mv`, `sad`.
+  - stage=&lt;string&gt;
+    Step2 stage marker. `auto` (默认), `tr1`, `tr2`.
+  - tr=&lt;int&gt;
+    Auto preset temporal radius. `1` or `2`. Sets `mode=degrain`, `stage`, and `delta`.
+  - blksize/search/overlap/delta/levels/pel
+    Block matching geometry and temporal radius parameters.
+  - thsad/thsadc/thscd1/thscd2
+    Degrain and scene-change thresholds.
+  - tr0/rep0/search_refine
+    Search reference prefilter parameters.
+  - searchparam/pelsearch/truemotion/lambda/lsad/pnew/plevel/globalmotion/dct/useflag
+    Motion search tuning parameters.
+  - mv_spatial_refine=&lt;int|auto&gt;
+    Motion-vector spatial refinement count. Default is `auto` (`-1`).
+  - chroma/binomial/tv_range
+    Chroma analysis and prefilter/range controls.
+
+- **限制**
+  - `mode=analyze` is inserted after `--vpp-kfm`; `mode=degrain` / `tr=1,2` are inserted after denoise filters. This matches the multi-stage degrain pipeline.
+  - Analysis modes require levels=2.
+  - Analysis supports only blksize=8, 16, or 32.
+  - overlap supports only 0 or blksize/2.
+  - delta supports 1-5, but delta>2 is supported only for analyze or stage=tr2 degrain.
+  - pel supports only 1, 2, or 4.
+
 ### --vpp-knn [&lt;param1&gt;=&lt;value1&gt;][,&lt;param2&gt;=&lt;value2&gt;],...
 强降噪滤镜。
 

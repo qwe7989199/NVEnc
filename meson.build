@@ -465,6 +465,16 @@ int main(void) { return PL_API_VER; }
       args: get_option('cpp_args'),
     )
   endif
+  if have_libplacebo_headers and not have_vulkan_headers
+    if enable_libplacebo_option == 'enabled'
+      error('libplacebo support requires Vulkan headers (vulkan/vulkan.h)')
+    endif
+    message('Vulkan headers not found, disabling libplacebo support')
+    have_libplacebo_headers = false
+    libplacebo_compile_dep = declare_dependency()
+    libplacebo_link_dep = declare_dependency()
+    have_libplacebo_link = false
+  endif
   if libplacebo_static
     if enable_libplacebo_option == 'enabled' and not have_libplacebo_link
       error('Static libplacebo not found')
@@ -728,6 +738,8 @@ common_cpp_args = [
   '-D__STDC_CONSTANT_MACROS',
   '-DLINUX64',
   '-Wno-unknown-pragmas',
+  '-Wno-unused-function',
+  '-Wno-attributes',
   '-Wno-unused',
   '-Wno-missing-braces',
 ]
@@ -760,10 +772,19 @@ nvenccore_sources = files(
   'NVEncCore/NVEncDevice.cpp',
   'NVEncCore/NVEncFilter.cpp',
   'NVEncCore/NVEncFilterAfs.cpp',
+  'NVEncCore/NVEncFilterBwdif.cpp',
+  'NVEncCore/NVEncFilterIvtc.cpp',
   'NVEncCore/NVEncFilterColorspace.cpp',
   'NVEncCore/NVEncFilterCurves.cpp',
   'NVEncCore/NVEncFilterCustom.cpp',
   'NVEncCore/NVEncFilterDelogo.cpp',
+  'NVEncCore/NVEncFilterDegrain.cpp',
+  'NVEncCore/NVEncFilterDegrainCommon.cpp',
+  'NVEncCore/NVEncFilterDegrainMV.cpp',
+  'NVEncCore/rgy_filter_nnedi_field.cpp',
+  'NVEncCore/rgy_filter_nnedi_weights.cpp',
+  'NVEncCore/rgy_filter_kfm_analyze.cpp',
+  'NVEncCore/NVEncFilterKfm.cpp',
   'NVEncCore/NVEncFilterDenoiseFFT3D.cpp',
   'NVEncCore/NVEncFilterDenoiseGauss.cpp',
   'NVEncCore/NVEncFilterLibplacebo.cpp',
@@ -870,12 +891,22 @@ cuda_sources = files(
   'NVEncCore/NVEncFilterAfsFilter.cu',
   'NVEncCore/NVEncFilterAfsMerge.cu',
   'NVEncCore/NVEncFilterAfsSynthesize.cu',
+  'NVEncCore/NVEncFilterBwdif.cu',
+  'NVEncCore/NVEncFilterIvtc.cu',
+  'NVEncCore/NVEncFilterKfm.cu',
   'NVEncCore/NVEncFilterConvolution3d.cu',
   'NVEncCore/NVEncFilterCrop.cu',
   'NVEncCore/NVEncFilterCurves.cu',
   'NVEncCore/NVEncFilterDeband.cu',
   'NVEncCore/NVEncFilterDecimate.cu',
   'NVEncCore/NVEncFilterDecomb.cu',
+  'NVEncCore/NVEncFilterDegrain.cu',
+  'NVEncCore/NVEncFilterDegrainU8Blk8.cu',
+  'NVEncCore/NVEncFilterDegrainU8Blk16.cu',
+  'NVEncCore/NVEncFilterDegrainU8Blk32.cu',
+  'NVEncCore/NVEncFilterDegrainU16Blk8.cu',
+  'NVEncCore/NVEncFilterDegrainU16Blk16.cu',
+  'NVEncCore/NVEncFilterDegrainU16Blk32.cu',
   'NVEncCore/NVEncFilterDelogo.cu',
   'NVEncCore/NVEncFilterDenoiseDct.cu',
   'NVEncCore/NVEncFilterDenoiseFFT3D8FP16.cu',
@@ -885,17 +916,37 @@ cuda_sources = files(
   'NVEncCore/NVEncFilterDenoiseKnn.cu',
   'NVEncCore/NVEncFilterDenoiseNLMeans.cu',
   'NVEncCore/NVEncFilterDenoisePmd.cu',
+  'NVEncCore/NVEncFilterDetailSharpen.cu',
   'NVEncCore/NVEncFilterEdgelevel.cu',
   'NVEncCore/NVEncFilterMsharpen.cu',
   'NVEncCore/NVEncFilterMpdecimate.cu',
   'NVEncCore/NVEncFilterNnedi.cu',
+  'NVEncCore/NVEncFilterNnediU8Fast.cu',
+  'NVEncCore/NVEncFilterNnediU8Slow.cu',
+  'NVEncCore/NVEncFilterNnediU16Fast.cu',
+  'NVEncCore/NVEncFilterNnediU16Slow.cu',
   'NVEncCore/NVEncFilterOverlay.cu',
   'NVEncCore/NVEncFilterResize.cu',
+  'NVEncCore/NVEncFilterRtgmc.cu',
+  'NVEncCore/NVEncFilterRtgmcBob.cu',
+  'NVEncCore/NVEncFilterRtgmcEdi.cu',
+  'NVEncCore/NVEncFilterRtgmcLossless.cu',
+  'NVEncCore/NVEncFilterRtgmcMMask.cu',
+  'NVEncCore/NVEncFilterRtgmcPrimitive.cu',
+  'NVEncCore/NVEncFilterRtgmcRetouch.cu',
+  'NVEncCore/NVEncFilterRtgmcSearchPrefilter.cu',
+  'NVEncCore/NVEncFilterRtgmcSearchPrefilterCommon.cu',
+  'NVEncCore/NVEncFilterRtgmcSearchPrefilterU8TR0.cu',
+  'NVEncCore/NVEncFilterRtgmcSearchPrefilterU8TRP.cu',
+  'NVEncCore/NVEncFilterRtgmcSearchPrefilterU16TR0.cu',
+  'NVEncCore/NVEncFilterRtgmcSearchPrefilterU16TRP.cu',
+  'NVEncCore/NVEncFilterRtgmcShimmerRepair.cu',
   'NVEncCore/NVEncFilterSmooth.cu',
   'NVEncCore/NVEncFilterMsmooth.cu',
   'NVEncCore/NVEncFilterSsim.cu',
   'NVEncCore/NVEncFilterSubburn.cu',
   'NVEncCore/NVEncFilterTransform.cu',
+  'NVEncCore/NVEncFilterSoftLight.cu',
   'NVEncCore/NVEncFilterTweak.cu',
   'NVEncCore/NVEncFilterUnsharp.cu',
   'NVEncCore/NVEncFilterWarpsharp.cu',
@@ -966,6 +1017,8 @@ simd_libs = [
 # ==============================================================================
 cuda_args = gpu_code_gen + [
   '-Wno-deprecated-gpu-targets',
+  '-diag-suppress=108',
+  '-Xcompiler=-Wno-unknown-pragmas,-Wno-unused-function',
   '--cudart=static',
   '-std=c++17',
 ]
@@ -1041,6 +1094,7 @@ executable('nvencc',
   [resource_nnedi3, resource_colorspace, resource_perfmon],
   cpp_args: common_cpp_args,
   cuda_args: cuda_args,
+  link_args: ['-Wno-deprecated-gpu-targets'],
   include_directories: common_include_dirs,
   dependencies: all_deps,
   link_with: simd_libs,

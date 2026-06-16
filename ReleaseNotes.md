@@ -1,5 +1,35 @@
 # NVEnc Release Notes
 
+## 9.19
+
+- Bundle nnedi3_weight.bin in the package.
+- Fix vpp-kfm RTGMC preset medium error (vpp-nnedi nnsize=5) by reducing NNEDI register usage. ( #776 )
+- Fix [--vpp-rtgmc](./NVEncC_Options.en.md#--vpp-rtgmc-param1value1) chroma_motion=false processing. ( #777 )
+- Fix failed to copy edi side-data frame with chroma_motion=true, source_match=3.
+- Fix Degrain analysis result reuse in [--vpp-rtgmc](./NVEncC_Options.en.md#--vpp-rtgmc-param1value1).
+- Fix frame pool allocation in [--vpp-rtgmc-search-prefilter](./NVEncC_Options.en.md#--vpp-rtgmc-search-prefilter-param1value1).
+
+## 9.18
+
+- Add new high quality deinterlace filter [--vpp-kfm](./NVEncC_Options.en.md#--vpp-kfm-param1value1param2value2) which supports 24/30/60 mixed VFR. ( #677 )
+- Add new high quality deinterlace filter [--vpp-rtgmc](./NVEncC_Options.en.md#--vpp-rtgmc-param1value1). ( #161, #218, #267, #677)
+- Add [--vpp-deint-csp](./NVEncC_Options.en.md#--vpp-deint-csp-string) to specify CSP for deinterlace filters.
+- Add new filter [--vpp-degrain](./NVEncC_Options.en.md#--vpp-degrain-param1value1).　( #161, #218, #267, #677)
+- Update [--vpp-nnedi](./NVEncC_Options.en.md#--vpp-nnedi-param1value1param2value2) to new specification.
+- Support odd crop values when output resolution must be even. ( #772 )
+- Fix CUDA texture border handling in [--vpp-yadif](./NVEncC_Options.en.md#--vpp-yadif-param1value1).
+- Fix audio desync when libavformat returns negative pts.
+
+## 9.17
+
+- Add [--vpp-bwdif](./NVEncC_Options.en.md#--vpp-bwdif-param1value1) and [--vpp-ivtc](./NVEncC_Options.en.md#--vpp-ivtc-param1value1param2value2).
+- Add [--vpp-detailsharpen](./NVEncC_Options.en.md#--vpp-detailsharpen-param1value1param2value2). ( #762 )
+- Add [--vpp-degrain](./NVEncC_Options.en.md#--vpp-degrain-param1value1) motion-compensated degrain filter.
+- Fix crop processing for yuv444 input where edge pixels were not written correctly. ( #763 )
+- Fix neroaacenc 2pass output.
+- Fix [--lowlatency](./NVEncC_Options.en.md#--lowlatency) corrupted on Linux from 9.15.
+- Extend AV1 [--qvbr](./NVEncC_Options.en.md#--qvbr--float) upper limit to 63.
+
 ## 9.16
 
 - Improve subtitle burn-in for Blu-ray and MPEG-TS inputs. ( #756 )

@@ -159,6 +159,7 @@ jobs:
           mkdir NVEncC_Release
           copy _build\${{ matrix.platform }}\RelStatic\NVEncC*.exe NVEncC_Release
           copy _build\${{ matrix.platform }}\RelStatic\*.dll NVEncC_Release
+          copy resource\nnedi3_weight\nnedi3_weights.bin NVEncC_Release
           if "${{ matrix.arch }}" == "x64" set CUDA_BIN=C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v${{ matrix.cuda_ver_major }}.${{ matrix.cuda_ver_minor }}\bin\x64
           if "${{ matrix.arch }}" == "x64" if not exist "%CUDA_BIN%\cudart64_*.dll" set CUDA_BIN=C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v${{ matrix.cuda_ver_major }}.${{ matrix.cuda_ver_minor }}\bin
           if "${{ matrix.arch }}" == "x64" set NVJPEG2K_BIN=%NVJPEG2K_ROOT%\lib\${{ matrix.nvjpeg2k_cuda_major }}

@@ -88,14 +88,21 @@
 #include "NVEncFilterMpdecimate.h"
 #include "NVEncFilterAfs.h"
 #include "NVEncFilterNnedi.h"
+#include "NVEncFilterRtgmc.h"
+#include "NVEncFilterKfm.h"
 #include "NVEncFilterYadif.h"
 #include "NVEncFilterDecomb.h"
+#include "NVEncFilterBwdif.h"
+#include "NVEncFilterDegrain.h"
+#include "NVEncFilterIvtc.h"
 #include "NVEncFilterRff.h"
 #include "NVEncFilterUnsharp.h"
 #include "NVEncFilterEdgelevel.h"
 #include "NVEncFilterMsharpen.h"
 #include "NVEncFilterWarpsharp.h"
+#include "NVEncFilterDetailSharpen.h"
 #include "NVEncFilterCurves.h"
+#include "NVEncFilterSoftLight.h"
 #include "NVEncFilterTweak.h"
 #include "NVEncFilterTransform.h"
 #include "NVEncFilterColorspace.h"
@@ -124,6 +131,47 @@ RGY_DISABLE_WARNING_POP
 
 
 using std::deque;
+
+static int nvenc_target_quality_max(const RGY_CODEC codec) {
+    return (codec == RGY_CODEC_AV1) ? 63 : 51;
+}
+
+static void clamp_nvenc_target_quality(NVEncRCParam& rcPrm, const RGY_CODEC codec) {
+    const auto qualityMax = nvenc_target_quality_max(codec);
+    if (rcPrm.targetQuality > qualityMax || (rcPrm.targetQuality == qualityMax && rcPrm.targetQualityLSB > 0)) {
+        rcPrm.targetQuality = qualityMax;
+        rcPrm.targetQualityLSB = 0;
+    }
+}
+
+static void clamp_nvenc_target_quality(InEncodeVideoParam *inputParam) {
+    clamp_nvenc_target_quality(inputParam->rcParam, inputParam->codec_rgy);
+    for (auto& rcPrm : inputParam->dynamicRC) {
+        clamp_nvenc_target_quality(rcPrm, inputParam->codec_rgy);
+    }
+}
+
+static int vpp_deinterlacer_filter_count_wo_vppnv(const InEncodeVideoParam *inputParam) {
+    int deinterlacer = 0;
+    if (inputParam->vpp.afs.enable) deinterlacer++;
+    if (inputParam->vpp.nnedi.enable) deinterlacer++;
+    if (inputParam->vpp.rtgmc.enable) deinterlacer++;
+    if (inputParam->vpp.kfm.enable) deinterlacer++;
+    if (inputParam->vpp.yadif.enable) deinterlacer++;
+    if (inputParam->vpp.decomb.enable) deinterlacer++;
+    if (inputParam->vpp.bwdif.enable) deinterlacer++;
+    if (inputParam->vpp.ivtc.enable) deinterlacer++;
+    return deinterlacer;
+}
+
+static int count_deinterlacer(const InEncodeVideoParam *inputParam) {
+    return vpp_deinterlacer_filter_count_wo_vppnv(inputParam)
+        + (inputParam->vppnv.deinterlace != cudaVideoDeinterlaceMode_Weave ? 1 : 0);
+}
+
+static bool deinterlacer_enabled(const InEncodeVideoParam *inputParam) {
+    return count_deinterlacer(inputParam) > 0;
+}
 
 #if ENABLE_NVTX
 #include "nvToolsExt.h"
@@ -336,8 +384,8 @@ NVEncCore::NVEncCore() :
     m_pipelineTasks(),
     m_encodeBufferCount(16),
     m_EncodeBufferQueue(),
-    m_stEOSOutputBfr(),
-    m_stEncodeBuffer() {
+    m_stEncodeBuffer(),
+    m_stEOSOutputBfr() {
     m_trimParam.offset = 0;
     m_keyFile.clear();
     m_keyOnChapter = false;
@@ -520,13 +568,7 @@ RGY_ERR NVEncCore::InitInput(InEncodeVideoParam *inputParam, DeviceCodecCsp& HWD
         }
     }
     // インタレ解除が指定され、かつインタレの指定がない場合は、自動的にインタレの情報取得を行う
-    int deinterlacer = 0;
-    if (inputParam->vppnv.deinterlace != cudaVideoDeinterlaceMode_Weave) deinterlacer++;
-    if (inputParam->vpp.afs.enable) deinterlacer++;
-    if (inputParam->vpp.nnedi.enable) deinterlacer++;
-    if (inputParam->vpp.yadif.enable) deinterlacer++;
-    if (inputParam->vpp.decomb.enable) deinterlacer++;
-    if (deinterlacer > 0 && ((inputParam->input.picstruct & RGY_PICSTRUCT_INTERLACED) == 0)) {
+    if (deinterlacer_enabled(inputParam) && ((inputParam->input.picstruct & RGY_PICSTRUCT_INTERLACED) == 0)) {
         inputParam->input.picstruct = RGY_PICSTRUCT_AUTO;
     }
 
@@ -534,9 +576,11 @@ RGY_ERR NVEncCore::InitInput(InEncodeVideoParam *inputParam, DeviceCodecCsp& HWD
     m_poolFrame = std::make_unique<RGYPoolAVFrame>();
 
     //入力モジュールの初期化
+    const bool vpp_ivtc_expand_active = inputParam->vpp.ivtc.enable && inputParam->vpp.ivtc.expand > 0;
     if (auto sts =initReaders(m_pFileReader, m_AudioReaders, &inputParam->input, &inputParam->inprm, inputCspOfRawReader,
         m_pStatus, &inputParam->common, &inputParam->ctrl, HWDecCodecCsp, subburnTrackId,
         inputParam->vpp.rff.enable, inputParam->vpp.afs.enable, inputParam->vpp.libplacebo_tonemapping.enable,
+        vpp_ivtc_expand_active,
         m_poolPkt.get(), m_poolFrame.get(), m_qpTable.get(), m_pPerfMonitor.get(), m_pLog); sts != RGY_ERR_NONE) {
         PrintMes(RGY_LOG_ERROR, _T("failed to initialize file reader(s).\n"));
         return sts;
@@ -1017,11 +1061,7 @@ RGY_ERR NVEncCore::CheckGPUListByEncoder(std::vector<std::unique_ptr<NVGPUInfo>>
         if (inputParam->codec_rgy == RGY_CODEC_H264
             && (
                 (inputParam->input.picstruct & RGY_PICSTRUCT_INTERLACED)
-                && (inputParam->vppnv.deinterlace == cudaVideoDeinterlaceMode_Weave
-                    && !inputParam->vpp.afs.enable
-                    && !inputParam->vpp.nnedi.enable
-                    && !inputParam->vpp.yadif.enable
-                    && !inputParam->vpp.decomb.enable))
+                && !deinterlacer_enabled(inputParam))
             && !get_value(NV_ENC_CAPS_SUPPORT_FIELD_ENCODING, codec->caps)) {
             message += strsprintf(_T("GPU #%d (%s) does not support H.264 interlaced encoding.\n"), (*gpu)->id(), (*gpu)->name().c_str());
             gpu = gpuList.erase(gpu);
@@ -1590,10 +1630,7 @@ NVENCSTATUS NVEncCore::ReleaseIOBuffers() {
 
 bool NVEncCore::enableCuvidResize(const InEncodeVideoParam *inputParam) const {
     const bool interlacedEncode = ((inputParam->input.picstruct & RGY_PICSTRUCT_INTERLACED)
-        && (inputParam->vppnv.deinterlace == cudaVideoDeinterlaceMode_Weave
-            && !inputParam->vpp.afs.enable
-            && !inputParam->vpp.nnedi.enable
-            && !inputParam->vpp.yadif.enable));
+        && !deinterlacer_enabled(inputParam));
     return
          //デフォルトの補間方法
         inputParam->vpp.resize_algo == RGY_VPP_RESIZE_AUTO
@@ -1625,12 +1662,18 @@ bool NVEncCore::enableCuvidResize(const InEncodeVideoParam *inputParam) const {
             || inputParam->vpp.edgelevel.enable
             || inputParam->vpp.msharpen.enable
             || inputParam->vpp.warpsharp.enable
+            || inputParam->vpp.detailsharpen.enable
             || inputParam->vpp.afs.enable
             || inputParam->vpp.nnedi.enable
+            || inputParam->vpp.rtgmc.enable
+            || inputParam->vpp.kfm.enable
             || inputParam->vpp.yadif.enable
             || inputParam->vpp.decomb.enable
+            || inputParam->vpp.bwdif.enable
+            || inputParam->vpp.ivtc.enable
             || inputParam->vpp.tweak.enable
             || inputParam->vpp.curves.enable
+            || inputParam->vpp.softlight.enable
             || inputParam->vpp.transform.enable
             || inputParam->vpp.colorspace.enable
             || inputParam->vpp.libplacebo_tonemapping.enable
@@ -1714,24 +1757,16 @@ RGY_ERR NVEncCore::SetInputParam(InEncodeVideoParam *inputParam) {
         }
         return RGY_ERR_UNSUPPORTED;
     }
-    const auto inputChromaFmt = RGY_CSP_CHROMA_FORMAT[inputParam->input.csp];
-    const auto encChromaFmt = RGY_CSP_CHROMA_FORMAT[GetEncoderCSP(inputParam)];
-    const bool inputHSubsampled = inputChromaFmt == RGY_CHROMAFMT_YUV420 || inputChromaFmt == RGY_CHROMAFMT_YUV422;
-    const bool inputVSubsampled = inputChromaFmt == RGY_CHROMAFMT_YUV420;
-    const int crop_width_check_mask = ((encChromaFmt == RGY_CHROMAFMT_YUV420 || encChromaFmt == RGY_CHROMAFMT_YUV422) && inputHSubsampled) ? 1 : 0;
-    const int crop_height_check_mask = (is_interlaced(m_stPicStruct)) ? height_check_mask : ((encChromaFmt == RGY_CHROMAFMT_YUV420 && inputVSubsampled) ? 1 : 0);
-    if ((inputParam->input.crop.e.left & crop_width_check_mask) || (inputParam->input.crop.e.right & crop_width_check_mask)
-        || (inputParam->input.crop.e.up & crop_height_check_mask) || (inputParam->input.crop.e.bottom & crop_height_check_mask)) {
+
+    if (is_interlaced(m_stPicStruct)
+        && ((inputParam->input.crop.e.left & 1) || (inputParam->input.crop.e.right & 1)
+            || (inputParam->input.crop.e.up & height_check_mask) || (inputParam->input.crop.e.bottom & height_check_mask))) {
         PrintMes(RGY_LOG_ERROR, _T("%s: %dx%d, Crop [%d,%d,%d,%d]\n"),
              FOR_AUO ? _T("Crop値が無効です。") : _T("Invalid crop value."),
             inputParam->input.srcWidth, inputParam->input.srcHeight,
             inputParam->input.crop.c[0], inputParam->input.crop.c[1], inputParam->input.crop.c[2], inputParam->input.crop.c[3]);
-        if (crop_width_check_mask || crop_height_check_mask == 1) {
-            PrintMes(RGY_LOG_ERROR, FOR_AUO ? _T("Crop値は2の倍数である必要があります。\n") : _T("Crop value of mod2 required.\n"));
-        }
-        if (is_interlaced(m_stPicStruct)) {
-            PrintMes(RGY_LOG_ERROR, FOR_AUO ? _T("さらに、インタレ保持エンコードでは縦Crop値は4の倍数である必要があります。\n") : _T("For interlaced encoding, mod4 is required for height.\n"));
-        }
+        PrintMes(RGY_LOG_ERROR, FOR_AUO ? _T("Crop値は2の倍数である必要があります。\n") : _T("Crop value of mod2 required.\n"));
+        PrintMes(RGY_LOG_ERROR, FOR_AUO ? _T("さらに、インタレ保持エンコードでは縦Crop値は4の倍数である必要があります。\n") : _T("For interlaced encoding, mod4 is required for height.\n"));
         return RGY_ERR_UNSUPPORTED;
     }
 
@@ -1759,7 +1794,7 @@ RGY_ERR NVEncCore::SetInputParam(InEncodeVideoParam *inputParam) {
             return RGY_ERR_UNSUPPORTED;
         }
         m_stPicStruct = NV_ENC_PIC_STRUCT_FRAME;
-    } else if (inputParam->vpp.afs.enable || inputParam->vpp.nnedi.enable || inputParam->vpp.yadif.enable || inputParam->vpp.decomb.enable) {
+    } else if (deinterlacer_enabled(inputParam)) {
         m_stPicStruct = NV_ENC_PIC_STRUCT_FRAME;
     }
 
@@ -1986,6 +2021,7 @@ RGY_ERR NVEncCore::SetInputParam(InEncodeVideoParam *inputParam) {
         inputParam->rcParam.targetQuality = DEFAULT_QVBR_TARGET;
         inputParam->rcParam.targetQualityLSB = 0;
     }
+    clamp_nvenc_target_quality(inputParam);
 
     //その他のレート制御パラメータの設定
     m_stEncConfig.rcParams.averageBitRate    = inputParam->rcParam.avg_bitrate;
@@ -2582,13 +2618,13 @@ RGY_ERR NVEncCore::SetInputParam(InEncodeVideoParam *inputParam) {
         set_sliceModeData(m_stCreateEncodeParams.encodeConfig->encodeCodecConfig, inputParam->codec_rgy, 1);
     }
     set_bitDepth(m_stCreateEncodeParams.encodeConfig->encodeCodecConfig, inputParam->codec_rgy, m_dev->encoder()->getAPIver(), (NV_ENC_BIT_DEPTH)clamp(inputParam->outputDepth, 8, 10));
-    
+
     if (inputParam->codec_rgy == RGY_CODEC_HEVC || inputParam->codec_rgy == RGY_CODEC_AV1) {
         if (!m_dev->encoder()->checkAPIver(13, 0)) {
             set_enableTemporalSVC(m_stCreateEncodeParams.encodeConfig->encodeCodecConfig, inputParam->codec_rgy, inputParam->temporalSVC ? 1 : 0);
         }
     }
-    
+
     if ((inputParam->codec_rgy == RGY_CODEC_HEVC && m_dev->encoder()->checkAPIver(12, 2))
         || ((inputParam->codec_rgy == RGY_CODEC_AV1 || inputParam->codec_rgy == RGY_CODEC_H264) && m_dev->encoder()->checkAPIver(13, 0))) {
         if (inputParam->temporalFilterLevel.has_value()) {
@@ -2842,41 +2878,67 @@ RGY_ERR NVEncCore::SetInputParam(InEncodeVideoParam *inputParam) {
 std::vector<VppType> NVEncCore::InitFiltersCreateVppList(const InEncodeVideoParam *inputParam, const bool cspConvRequired, const bool cropRequired, const RGY_VPP_RESIZE_TYPE resizeRequired) {
     std::vector<VppType> filterPipeline;
     filterPipeline.reserve((size_t)VppType::CL_MAX);
+    const bool useInputCspForDeint = inputParam->vpp.deintCsp == VppDeintCsp::Input && vpp_deinterlacer_filter_count_wo_vppnv(inputParam) > 0;
+    const bool delayCspConvForDeint = useInputCspForDeint && cspConvRequired;
 
-    if (cspConvRequired || cropRequired)   filterPipeline.push_back(VppType::CL_CROP);
-    if (inputParam->vpp.colorspace.enable) {
+    auto addColorspaceFilters = [&]() {
+        if (inputParam->vpp.colorspace.enable) {
 #if 0
-        bool requireOpenCL = inputParam->vpp.colorspace.hdr2sdr.tonemap != HDR2SDR_DISABLED || inputParam->vpp.colorspace.lut3d.table_file.length() > 0;
-        if (!requireOpenCL) {
-            auto currentVUI = inputParam->input.vui;
-            for (size_t i = 0; i < inputParam->vpp.colorspace.convs.size(); i++) {
-                auto conv_from = inputParam->vpp.colorspace.convs[i].from;
-                auto conv_to = inputParam->vpp.colorspace.convs[i].to;
-                if (conv_from.chromaloc != conv_to.chromaloc
-                    || conv_from.colorprim != conv_to.colorprim
-                    || conv_from.transfer != conv_to.transfer) {
-                    requireOpenCL = true;
-                } else if (conv_from.matrix != conv_to.matrix
-                    && (conv_from.matrix != RGY_MATRIX_ST170_M && conv_from.matrix != RGY_MATRIX_BT709)
-                    && (conv_to.matrix != RGY_MATRIX_ST170_M && conv_to.matrix != RGY_MATRIX_BT709)) {
-                    requireOpenCL = true;
+            bool requireOpenCL = inputParam->vpp.colorspace.hdr2sdr.tonemap != HDR2SDR_DISABLED || inputParam->vpp.colorspace.lut3d.table_file.length() > 0;
+            if (!requireOpenCL) {
+                auto currentVUI = inputParam->input.vui;
+                for (size_t i = 0; i < inputParam->vpp.colorspace.convs.size(); i++) {
+                    auto conv_from = inputParam->vpp.colorspace.convs[i].from;
+                    auto conv_to = inputParam->vpp.colorspace.convs[i].to;
+                    if (conv_from.chromaloc != conv_to.chromaloc
+                        || conv_from.colorprim != conv_to.colorprim
+                        || conv_from.transfer != conv_to.transfer) {
+                        requireOpenCL = true;
+                    } else if (conv_from.matrix != conv_to.matrix
+                        && (conv_from.matrix != RGY_MATRIX_ST170_M && conv_from.matrix != RGY_MATRIX_BT709)
+                        && (conv_to.matrix != RGY_MATRIX_ST170_M && conv_to.matrix != RGY_MATRIX_BT709)) {
+                        requireOpenCL = true;
+                    }
                 }
             }
-        }
-        filterPipeline.push_back((requireOpenCL) ? VppType::CL_COLORSPACE : VppType::AMF_COLORSPACE);
+            filterPipeline.push_back((requireOpenCL) ? VppType::CL_COLORSPACE : VppType::AMF_COLORSPACE);
 #else
-        filterPipeline.push_back(VppType::CL_COLORSPACE);
+            filterPipeline.push_back(VppType::CL_COLORSPACE);
 #endif
+        }
+        if (inputParam->vpp.libplacebo_tonemapping.enable) filterPipeline.push_back(VppType::CL_LIBPLACEBO_TONEMAP);
+    };
+
+    if ((cspConvRequired && !delayCspConvForDeint) || cropRequired) filterPipeline.push_back(VppType::CL_CROP);
+    if (!useInputCspForDeint) {
+        addColorspaceFilters();
     }
-    if (inputParam->vpp.libplacebo_tonemapping.enable) filterPipeline.push_back(VppType::CL_LIBPLACEBO_TONEMAP);
     if (inputParam->vpp.rff.enable)           filterPipeline.push_back(VppType::CL_RFF);
     if (inputParam->vpp.delogo.enable)        filterPipeline.push_back(VppType::CL_DELOGO);
     if (inputParam->vpp.afs.enable)           filterPipeline.push_back(VppType::CL_AFS);
     if (inputParam->vpp.nnedi.enable)         filterPipeline.push_back(VppType::CL_NNEDI);
+    if (inputParam->vpp.rtgmc.enable)         filterPipeline.push_back(VppType::CL_RTGMC);
+    if (inputParam->vpp.kfm.enable)           filterPipeline.push_back(VppType::CL_KFM);
+    const bool degrainLegacy = inputParam->vpp.degrain.enable;
+    const bool degrainAnalyze = inputParam->vpp.degrainAnalyze.enable;
+    const bool degrainTR1 = inputParam->vpp.degrainTR1.enable;
+    const bool degrainTR2 = inputParam->vpp.degrainTR2.enable;
+    const bool shimmerRepairRep1 = inputParam->vpp.rtgmc_shimmer_repairRep1.enable;
+    const bool shimmerRepairRep2 = inputParam->vpp.rtgmc_shimmer_repairRep2.enable;
+    if (inputParam->vpp.rtgmc_bob.enable)     filterPipeline.push_back(VppType::CL_RTGMC_BOB);
+    if (inputParam->vpp.rtgmc_search_prefilter.enable) filterPipeline.push_back(VppType::CL_RTGMC_SEARCH_PREFILTER);
+    if (degrainAnalyze)                       filterPipeline.push_back(VppType::CL_DEGRAIN_ANALYZE);
+    if (inputParam->vpp.rtgmc_edi.enable && !degrainLegacy) filterPipeline.push_back(VppType::CL_RTGMC_EDI);
     if (inputParam->vpp.yadif.enable)         filterPipeline.push_back(VppType::CL_YADIF);
     if (inputParam->vpp.decomb.enable)        filterPipeline.push_back(VppType::CL_DECOMB);
+    if (inputParam->vpp.bwdif.enable)         filterPipeline.push_back(VppType::CL_BWDIF);
+    if (inputParam->vpp.ivtc.enable)          filterPipeline.push_back(VppType::CL_IVTC);
     if (inputParam->vpp.decimate.enable)      filterPipeline.push_back(VppType::CL_DECIMATE);
     if (inputParam->vpp.mpdecimate.enable)    filterPipeline.push_back(VppType::CL_MPDECIMATE);
+    if (delayCspConvForDeint)                 filterPipeline.push_back(VppType::CL_CROP);
+    if (useInputCspForDeint) {
+        addColorspaceFilters();
+    }
     if (inputParam->vpp.selectevery.enable)   filterPipeline.push_back(VppType::CL_SELECT_EVERY);
     if (inputParam->vpp.transform.enable)     filterPipeline.push_back(VppType::CL_TRANSFORM);
     if (inputParam->vpp.convolution3d.enable) filterPipeline.push_back(VppType::CL_CONVOLUTION3D);
@@ -2889,6 +2951,15 @@ std::vector<VppType> NVEncCore::InitFiltersCreateVppList(const InEncodeVideoPara
     if (inputParam->vpp.knn.enable)           filterPipeline.push_back(VppType::CL_DENOISE_KNN);
     if (inputParam->vpp.nlmeans.enable)       filterPipeline.push_back(VppType::CL_DENOISE_NLMEANS);
     if (inputParam->vpp.pmd.enable)           filterPipeline.push_back(VppType::CL_DENOISE_PMD);
+    if (degrainLegacy)                        filterPipeline.push_back(VppType::CL_DEGRAIN);
+    if (inputParam->vpp.rtgmc_edi.enable && degrainLegacy) filterPipeline.push_back(VppType::CL_RTGMC_EDI);
+    if (degrainTR1)                           filterPipeline.push_back(VppType::CL_DEGRAIN_APPLY_TR1);
+    if (shimmerRepairRep1)                    filterPipeline.push_back(VppType::CL_RTGMC_SHIMMER_REPAIR_REP1);
+    if (inputParam->vpp.rtgmc_retouch.enable) filterPipeline.push_back(VppType::CL_RTGMC_RETOUCH);
+    if (degrainTR2)                           filterPipeline.push_back(VppType::CL_DEGRAIN_APPLY_TR2);
+    if (shimmerRepairRep2)                    filterPipeline.push_back(VppType::CL_RTGMC_SHIMMER_REPAIR_REP2);
+    if (inputParam->vpp.rtgmc_shimmer_repair.enable) filterPipeline.push_back(VppType::CL_RTGMC_SHIMMER_REPAIR);
+    if (inputParam->vpp.rtgmc_primitive.enable) filterPipeline.push_back(VppType::CL_RTGMC_PRIMITIVE);
     if (inputParam->vppnv.gaussMaskSize>0)    filterPipeline.push_back(VppType::NPP_GAUSS);
     if (inputParam->vpp.subburn.size()>0)     filterPipeline.push_back(VppType::CL_SUBBURN);
     if (inputParam->vpp.libplacebo_shader.size() > 0)  filterPipeline.push_back(VppType::CL_LIBPLACEBO_SHADER);
@@ -2897,7 +2968,9 @@ std::vector<VppType> NVEncCore::InitFiltersCreateVppList(const InEncodeVideoPara
     if (inputParam->vpp.edgelevel.enable)  filterPipeline.push_back(VppType::CL_EDGELEVEL);
     if (inputParam->vpp.msharpen.enable)   filterPipeline.push_back(VppType::CL_MSHARPEN);
     if (inputParam->vpp.warpsharp.enable)  filterPipeline.push_back(VppType::CL_WARPSHARP);
+    if (inputParam->vpp.detailsharpen.enable) filterPipeline.push_back(VppType::CL_DETAILSHARPEN);
     if (inputParam->vpp.curves.enable)     filterPipeline.push_back(VppType::CL_CURVES);
+    if (inputParam->vpp.softlight.enable)  filterPipeline.push_back(VppType::CL_SOFTLIGHT);
     if (inputParam->vpp.tweak.enable)      filterPipeline.push_back(VppType::CL_TWEAK);
     if (inputParam->vpp.deband.enable)     filterPipeline.push_back(VppType::CL_DEBAND);
     if (inputParam->vpp.libplacebo_deband.enable)     filterPipeline.push_back(VppType::CL_LIBPLACEBO_DEBAND);
@@ -3024,16 +3097,11 @@ RGY_ERR NVEncCore::InitFilters(const InEncodeVideoParam *inputParam) {
     if (inputParam->vppnv.deinterlace != cudaVideoDeinterlaceMode_Weave) {
         m_stPicStruct = NV_ENC_PIC_STRUCT_FRAME;
         inputFrame.picstruct = RGY_PICSTRUCT_FRAME;
-    } else if (inputParam->vpp.afs.enable || inputParam->vpp.nnedi.enable || inputParam->vpp.yadif.enable || inputParam->vpp.decomb.enable) {
+    } else if (deinterlacer_enabled(inputParam)) {
         m_stPicStruct = NV_ENC_PIC_STRUCT_FRAME;
     }
     //インタレ解除の個数をチェック
-    int deinterlacer = 0;
-    if (inputParam->vppnv.deinterlace != cudaVideoDeinterlaceMode_Weave) deinterlacer++;
-    if (inputParam->vpp.afs.enable) deinterlacer++;
-    if (inputParam->vpp.nnedi.enable) deinterlacer++;
-    if (inputParam->vpp.yadif.enable) deinterlacer++;
-    if (inputParam->vpp.decomb.enable) deinterlacer++;
+    const int deinterlacer = count_deinterlacer(inputParam);
     if (deinterlacer >= 2) {
         PrintMes(RGY_LOG_ERROR, _T("Activating 2 or more deinterlacer is not supported.\n"));
         return RGY_ERR_UNSUPPORTED;
@@ -3052,36 +3120,72 @@ RGY_ERR NVEncCore::InitFilters(const InEncodeVideoParam *inputParam) {
             PrintMes(RGY_LOG_ERROR, _T("vpp-rff cannot be used with trim.\n"));
             return RGY_ERR_UNSUPPORTED;
         }
+        if (inputParam->vpp.ivtc.enable && inputParam->vpp.ivtc.expand > 0) {
+            PrintMes(RGY_LOG_ERROR, _T("vpp-rff cannot be used with vpp-ivtc expand=on.\n"));
+            return RGY_ERR_UNSUPPORTED;
+        }
     }
 
     std::vector<VppType> filterPipeline = InitFiltersCreateVppList(inputParam, cspConvRequired, cropRequired, resizeRequired);
     //読み込み時のcrop
     const sInputCrop *inputCrop = (cropRequired) ? &inputParam->input.crop : nullptr;
     const auto resize = std::make_pair(resizeWidth, resizeHeight);
+    const bool useInputCspForDeint = inputParam->vpp.deintCsp == VppDeintCsp::Input && vpp_deinterlacer_filter_count_wo_vppnv(inputParam) > 0;
+    const bool delayCspConvForDeint = useInputCspForDeint && cspConvRequired;
 
     std::vector<std::unique_ptr<NVEncFilter>> vppCUDAFilters;
     const auto encCsp = GetEncoderCSP(inputParam);
-    auto filterCsp = encCsp;
-    switch (filterCsp) {
-    case RGY_CSP_NV12:  filterCsp = RGY_CSP_YV12; break;
-    case RGY_CSP_P010:  filterCsp = RGY_CSP_YV12_16; break;
-    case RGY_CSP_NV16:  filterCsp = RGY_CSP_YUV444; break;
-    case RGY_CSP_P210:  filterCsp = RGY_CSP_YUV444_16; break;
-    case RGY_CSP_NV12A: filterCsp = RGY_CSP_YUVA420; break;
-    case RGY_CSP_P010A: filterCsp = RGY_CSP_YUVA420_16; break;
-    default: break;
-    }
+    auto normalizeFilterCsp = [](RGY_CSP csp) {
+        switch (csp) {
+        case RGY_CSP_NV12:  return RGY_CSP_YV12;
+        case RGY_CSP_P010:  return RGY_CSP_YV12_16;
+        case RGY_CSP_NV16:  return RGY_CSP_YUV444;
+        case RGY_CSP_P210:  return RGY_CSP_YUV444_16;
+        case RGY_CSP_NV12A: return RGY_CSP_YUVA420;
+        case RGY_CSP_P010A: return RGY_CSP_YUVA420_16;
+        default: return csp;
+        }
+    };
+    auto filterCsp = normalizeFilterCsp(encCsp);
     if (RGY_CSP_CHROMA_FORMAT[inputFrame.csp] == RGY_CHROMAFMT_RGB
         && (encCsp == RGY_CSP_NV12 || encCsp == RGY_CSP_P010)
         && filterPipeline.size() == 1 && filterPipeline.front() == VppType::CL_CROP) {
         filterCsp = encCsp;
     }
+    auto firstFilterCsp = (useInputCspForDeint) ? normalizeFilterCsp(inputFrame.csp) : filterCsp;
     if (inputParam->vpp.afs.enable && RGY_CSP_CHROMA_FORMAT[inputFrame.csp] == RGY_CHROMAFMT_YUV444) {
-        filterCsp = (RGY_CSP_BIT_DEPTH[inputFrame.csp] > 8) ? RGY_CSP_YUV444_16 : RGY_CSP_YUV444;
+        firstFilterCsp = (RGY_CSP_BIT_DEPTH[inputFrame.csp] > 8) ? RGY_CSP_YUV444_16 : RGY_CSP_YUV444;
+        if (!delayCspConvForDeint) {
+            filterCsp = firstFilterCsp;
+        }
     }
+    auto addCspCropFilter = [&](const RGY_CSP targetCsp) {
+        unique_ptr<NVEncFilter> filterCrop(new NVEncFilterCspCrop());
+        shared_ptr<NVEncFilterParamCrop> param(new NVEncFilterParamCrop());
+        param->frameIn = inputFrame;
+        param->frameOut = inputFrame;
+        param->frameOut.csp = targetCsp;
+        param->frameOut.bitdepth = RGY_CSP_BIT_DEPTH[param->frameOut.csp];
+        param->baseFps = m_encFps;
+        if (inputCrop) {
+            param->crop = *inputCrop;
+            inputCrop = nullptr;
+        }
+        param->bOutOverwrite = false;
+        NVEncCtxAutoLock(cxtlock(m_dev->vidCtxLock()));
+        auto sts = filterCrop->init(param, m_pLog);
+        if (sts != RGY_ERR_NONE) {
+            return sts;
+        }
+        m_pLastFilterParam = std::dynamic_pointer_cast<NVEncFilterParam>(param);
+        inputFrame = param->frameOut;
+        m_encFps = param->baseFps;
+        vppCUDAFilters.push_back(std::move(filterCrop));
+        return RGY_ERR_NONE;
+    };
 
     size_t ifilter = 0;
-    if (filterPipeline.size() > 0 && (inputFrame.csp != filterCsp || filterPipeline.front() == VppType::CL_CROP)) {
+    if (filterPipeline.size() > 0 && (inputFrame.csp != firstFilterCsp || filterPipeline.front() == VppType::CL_CROP)) {
         if (filterPipeline.front() == VppType::CL_CROP) {
             ifilter++;
         }
@@ -3089,7 +3193,7 @@ RGY_ERR NVEncCore::InitFilters(const InEncodeVideoParam *inputParam) {
         shared_ptr<NVEncFilterParamCrop> param(new NVEncFilterParamCrop());
         param->frameIn = inputFrame;
         param->frameOut = inputFrame;
-        param->frameOut.csp = filterCsp;
+        param->frameOut.csp = firstFilterCsp;
         if (filterPipeline.size() > ifilter && filterPipeline[ifilter] == VppType::CL_COLORSPACE) { // 次のフィルタがcolorpaceの時はなるべくそのまま転送するように
             if (RGY_CSP_CHROMA_FORMAT[inputFrame.csp] == RGY_CHROMAFMT_RGB || RGY_CSP_CHROMA_FORMAT[inputFrame.csp] == RGY_CHROMAFMT_RGB_PACKED) {
                 param->frameOut.csp = (rgy_csp_has_alpha(inputFrame.csp))
@@ -3121,6 +3225,13 @@ RGY_ERR NVEncCore::InitFilters(const InEncodeVideoParam *inputParam) {
         vppCUDAFilters.push_back(std::move(filterCrop));
     }
     for (; ifilter < filterPipeline.size(); ifilter++) {
+        if (filterPipeline[ifilter] == VppType::CL_CROP) {
+            auto sts = addCspCropFilter(filterCsp);
+            if (sts != RGY_ERR_NONE) {
+                return sts;
+            }
+            continue;
+        }
         auto err = AddFilterCUDA(vppCUDAFilters, inputFrame, filterPipeline[ifilter], inputParam, inputCrop, resize, VuiFiltered);
         if (err != RGY_ERR_NONE) {
             PrintMes(RGY_LOG_ERROR, _T("Unsupported vpp filter type.\n"));
@@ -3355,12 +3466,130 @@ RGY_ERR NVEncCore::AddFilterCUDA(std::vector<std::unique_ptr<NVEncFilter>>& cufi
     if (vppType == VppType::CL_NNEDI) {
         unique_ptr<NVEncFilter> filter(new NVEncFilterNnedi());
         shared_ptr<NVEncFilterParamNnedi> param(new NVEncFilterParamNnedi());
-        param->nnedi = inputParam->vpp.nnedi;
+        param->nnedi.enable = inputParam->vpp.nnedi.enable;
+        param->nnedi.field = inputParam->vpp.nnedi.field;
+        param->nnedi.nsize = inputParam->vpp.nnedi.nsize;
+        param->nnedi.nns = inputParam->vpp.nnedi.nns;
+        param->nnedi.quality = inputParam->vpp.nnedi.quality;
+        param->nnedi.prescreen = inputParam->vpp.nnedi.prescreen;
+        param->nnedi.errortype = inputParam->vpp.nnedi.errortype;
+        param->nnedi.clamp = inputParam->vpp.nnedi.clamp;
+        param->nnedi.doubleHeight = inputParam->vpp.nnedi.doubleHeight;
+        param->nnedi.weightfile = inputParam->vpp.nnedi.weightfile;
         param->compute_capability = m_dev->cc();
         param->frameIn = inputFrame;
         param->frameOut = inputFrame;
         param->baseFps = m_encFps;
         param->timebase = m_outputTimebase;
+        param->bOutOverwrite = false;
+        NVEncCtxAutoLock(cxtlock(m_dev->vidCtxLock()));
+        auto sts = filter->init(param, m_pLog);
+        if (sts != RGY_ERR_NONE) {
+            return sts;
+        }
+        //フィルタチェーンに追加
+        cufilters.push_back(std::move(filter));
+        //パラメータ情報を更新
+        m_pLastFilterParam = std::dynamic_pointer_cast<NVEncFilterParam>(param);
+        //入力フレーム情報を更新
+        inputFrame = param->frameOut;
+        m_encFps = param->baseFps;
+        return RGY_ERR_NONE;
+    }
+    //rtgmc
+    if (vppType == VppType::CL_RTGMC) {
+        unique_ptr<NVEncFilter> filter(new NVEncFilterRtgmc());
+        shared_ptr<NVEncFilterParamRtgmc> param(new NVEncFilterParamRtgmc());
+        param->rtgmc = inputParam->vpp.rtgmc;
+        param->timebase = m_outputTimebase;
+        param->frameIn = inputFrame;
+        param->frameOut = inputFrame;
+        param->baseFps = m_encFps;
+        param->bOutOverwrite = false;
+        NVEncCtxAutoLock(cxtlock(m_dev->vidCtxLock()));
+        auto sts = filter->init(param, m_pLog);
+        if (sts != RGY_ERR_NONE) {
+            return sts;
+        }
+        //フィルタチェーンに追加
+        cufilters.push_back(std::move(filter));
+        //パラメータ情報を更新
+        m_pLastFilterParam = std::dynamic_pointer_cast<NVEncFilterParam>(param);
+        //入力フレーム情報を更新
+        inputFrame = param->frameOut;
+        m_encFps = param->baseFps;
+        return RGY_ERR_NONE;
+    }
+    //kfm
+    if (vppType == VppType::CL_KFM) {
+        unique_ptr<NVEncFilter> filter(new NVEncFilterKfm());
+        shared_ptr<NVEncFilterParamKfm> param(new NVEncFilterParamKfm());
+        param->kfm = inputParam->vpp.kfm;
+        param->frameIn = inputFrame;
+        param->frameOut = inputFrame;
+        param->baseFps = m_encFps;
+        param->timebase = m_outputTimebase;
+        param->bOutOverwrite = false;
+        NVEncCtxAutoLock(cxtlock(m_dev->vidCtxLock()));
+        auto sts = filter->init(param, m_pLog);
+        if (sts != RGY_ERR_NONE) {
+            return sts;
+        }
+        //フィルタチェーンに追加
+        cufilters.push_back(std::move(filter));
+        //パラメータ情報を更新
+        m_pLastFilterParam = std::dynamic_pointer_cast<NVEncFilterParam>(param);
+        //入力フレーム情報を更新
+        inputFrame = param->frameOut;
+        m_encFps = param->baseFps;
+        return RGY_ERR_NONE;
+    }
+    //rtgmc bob
+    if (vppType == VppType::CL_RTGMC_BOB) {
+        unique_ptr<NVEncFilter> filter(new NVEncFilterRtgmcBob());
+        shared_ptr<NVEncFilterParamRtgmcBob> param(new NVEncFilterParamRtgmcBob());
+        param->order = (inputParam->vpp.rtgmc_bob.order == VppRtgmcBobOrder::TFF) ? RGYRtgmcBobFieldOrder::TFF
+            : (inputParam->vpp.rtgmc_bob.order == VppRtgmcBobOrder::BFF) ? RGYRtgmcBobFieldOrder::BFF
+            : RGYRtgmcBobFieldOrder::Auto;
+        param->timebase = m_outputTimebase;
+        param->frameIn = inputFrame;
+        param->frameOut = inputFrame;
+        param->baseFps = m_encFps;
+        param->bOutOverwrite = false;
+        NVEncCtxAutoLock(cxtlock(m_dev->vidCtxLock()));
+        auto sts = filter->init(param, m_pLog);
+        if (sts != RGY_ERR_NONE) {
+            return sts;
+        }
+        //フィルタチェーンに追加
+        cufilters.push_back(std::move(filter));
+        //パラメータ情報を更新
+        m_pLastFilterParam = std::dynamic_pointer_cast<NVEncFilterParam>(param);
+        //入力フレーム情報を更新
+        inputFrame = param->frameOut;
+        m_encFps = param->baseFps;
+        return RGY_ERR_NONE;
+    }
+    //rtgmc search prefilter
+    if (vppType == VppType::CL_RTGMC_SEARCH_PREFILTER) {
+        unique_ptr<NVEncFilter> filter(new NVEncFilterRtgmcSearchPrefilter());
+        shared_ptr<NVEncFilterParamRtgmcSearchPrefilter> param(new NVEncFilterParamRtgmcSearchPrefilter());
+        param->tr0 = inputParam->vpp.rtgmc_search_prefilter.tr0;
+        param->rep0Thin = inputParam->vpp.rtgmc_search_prefilter.rep0Thin;
+        param->rep0Pad = inputParam->vpp.rtgmc_search_prefilter.rep0Pad;
+        param->searchRefine = inputParam->vpp.rtgmc_search_prefilter.searchRefine;
+        param->tvRange = inputParam->vpp.rtgmc_search_prefilter.tvRange;
+        param->chromaMotion = inputParam->vpp.rtgmc_search_prefilter.chromaMotion;
+        param->dumpY4m = inputParam->vpp.rtgmc_search_prefilter.dumpY4m;
+        param->dumpStage = inputParam->vpp.rtgmc_search_prefilter.dumpStage;
+        param->dumpMaxFrames = inputParam->vpp.rtgmc_search_prefilter.dumpMaxFrames;
+        param->attachSearchLuma = inputParam->vpp.rtgmc_edi.enable || inputParam->vpp.degrain.enable
+            || inputParam->vpp.degrainAnalyze.enable || inputParam->vpp.degrainTR1.enable || inputParam->vpp.degrainTR2.enable
+            || inputParam->vpp.rtgmc_retouch.enable || inputParam->vpp.rtgmc_shimmer_repair.enable
+            || inputParam->vpp.rtgmc_shimmer_repairRep1.enable || inputParam->vpp.rtgmc_shimmer_repairRep2.enable;
+        param->frameIn = inputFrame;
+        param->frameOut = inputFrame;
+        param->baseFps = m_encFps;
         param->bOutOverwrite = false;
         NVEncCtxAutoLock(cxtlock(m_dev->vidCtxLock()));
         auto sts = filter->init(param, m_pLog);
@@ -3408,6 +3637,241 @@ RGY_ERR NVEncCore::AddFilterCUDA(std::vector<std::unique_ptr<NVEncFilter>>& cufi
         param->frameIn = inputFrame;
         param->frameOut = inputFrame;
         param->baseFps = m_encFps;
+        param->bOutOverwrite = false;
+        NVEncCtxAutoLock(cxtlock(m_dev->vidCtxLock()));
+        auto sts = filter->init(param, m_pLog);
+        if (sts != RGY_ERR_NONE) {
+            return sts;
+        }
+        //フィルタチェーンに追加
+        cufilters.push_back(std::move(filter));
+        //パラメータ情報を更新
+        m_pLastFilterParam = std::dynamic_pointer_cast<NVEncFilterParam>(param);
+        //入力フレーム情報を更新
+        inputFrame = param->frameOut;
+        m_encFps = param->baseFps;
+        return RGY_ERR_NONE;
+    }
+    //bwdif
+    if (vppType == VppType::CL_BWDIF) {
+        unique_ptr<NVEncFilter> filter(new NVEncFilterBwdif());
+        shared_ptr<NVEncFilterParamBwdif> param(new NVEncFilterParamBwdif());
+        param->bwdif = inputParam->vpp.bwdif;
+        param->frameIn = inputFrame;
+        param->frameOut = inputFrame;
+        param->frameOut.picstruct = RGY_PICSTRUCT_FRAME;
+        param->baseFps = m_encFps;
+        param->bOutOverwrite = false;
+        NVEncCtxAutoLock(cxtlock(m_dev->vidCtxLock()));
+        auto sts = filter->init(param, m_pLog);
+        if (sts != RGY_ERR_NONE) {
+            return sts;
+        }
+        //フィルタチェーンに追加
+        cufilters.push_back(std::move(filter));
+        //パラメータ情報を更新
+        m_pLastFilterParam = std::dynamic_pointer_cast<NVEncFilterParam>(param);
+        //入力フレーム情報を更新
+        inputFrame = param->frameOut;
+        m_encFps = param->baseFps;
+        return RGY_ERR_NONE;
+    }
+    //degrain
+    if (vppType == VppType::CL_DEGRAIN
+        || vppType == VppType::CL_DEGRAIN_ANALYZE
+        || vppType == VppType::CL_DEGRAIN_APPLY_TR1
+        || vppType == VppType::CL_DEGRAIN_APPLY_TR2) {
+        unique_ptr<NVEncFilter> filter(new NVEncFilterDegrain());
+        shared_ptr<NVEncFilterParamDegrain> param(new NVEncFilterParamDegrain());
+        switch (vppType) {
+        case VppType::CL_DEGRAIN_ANALYZE:
+            param->degrain = inputParam->vpp.degrainAnalyze;
+            param->degrain.mode = VppDegrainMode::Analyze;
+            param->degrain.stage = VppDegrainStage::TR1;
+            break;
+        case VppType::CL_DEGRAIN_APPLY_TR1:
+            param->degrain = inputParam->vpp.degrainTR1;
+            param->degrain.mode = VppDegrainMode::Degrain;
+            param->degrain.stage = VppDegrainStage::TR1;
+            break;
+        case VppType::CL_DEGRAIN_APPLY_TR2:
+            param->degrain = inputParam->vpp.degrainTR2;
+            param->degrain.mode = VppDegrainMode::Degrain;
+            param->degrain.stage = VppDegrainStage::TR2;
+            break;
+        default:
+            param->degrain = inputParam->vpp.degrain;
+            break;
+        }
+        param->frameIn = inputFrame;
+        param->frameOut = inputFrame;
+        param->frameOut.picstruct = RGY_PICSTRUCT_FRAME;
+        param->baseFps = m_encFps;
+        param->bOutOverwrite = false;
+        NVEncCtxAutoLock(cxtlock(m_dev->vidCtxLock()));
+        auto sts = filter->init(param, m_pLog);
+        if (sts != RGY_ERR_NONE) {
+            return sts;
+        }
+        //フィルタチェーンに追加
+        cufilters.push_back(std::move(filter));
+        //パラメータ情報を更新
+        m_pLastFilterParam = std::dynamic_pointer_cast<NVEncFilterParam>(param);
+        //入力フレーム情報を更新
+        inputFrame = param->frameOut;
+        m_encFps = param->baseFps;
+        return RGY_ERR_NONE;
+    }
+    //rtgmc edi
+    if (vppType == VppType::CL_RTGMC_EDI) {
+        unique_ptr<NVEncFilter> filter(new NVEncFilterRtgmcEdi());
+        shared_ptr<NVEncFilterParamRtgmcEdi> param(new NVEncFilterParamRtgmcEdi());
+        param->mode = inputParam->vpp.rtgmc_edi.mode;
+        param->chromaEdi = inputParam->vpp.rtgmc_edi.chromaEdi;
+        param->nnsize = inputParam->vpp.rtgmc_edi.nnsize;
+        param->nneurons = inputParam->vpp.rtgmc_edi.nneurons;
+        param->ediqual = inputParam->vpp.rtgmc_edi.ediqual;
+        param->frameIn = inputFrame;
+        param->frameOut = inputFrame;
+        param->baseFps = m_encFps;
+        param->bOutOverwrite = false;
+        NVEncCtxAutoLock(cxtlock(m_dev->vidCtxLock()));
+        auto sts = filter->init(param, m_pLog);
+        if (sts != RGY_ERR_NONE) {
+            return sts;
+        }
+        //フィルタチェーンに追加
+        cufilters.push_back(std::move(filter));
+        //パラメータ情報を更新
+        m_pLastFilterParam = std::dynamic_pointer_cast<NVEncFilterParam>(param);
+        //入力フレーム情報を更新
+        inputFrame = param->frameOut;
+        m_encFps = param->baseFps;
+        return RGY_ERR_NONE;
+    }
+    //rtgmc retouch
+    if (vppType == VppType::CL_RTGMC_RETOUCH) {
+        unique_ptr<NVEncFilter> filter(new NVEncFilterRtgmcRetouch());
+        shared_ptr<NVEncFilterParamRtgmcRetouch> param(new NVEncFilterParamRtgmcRetouch());
+        param->rtgmc_retouch = inputParam->vpp.rtgmc_retouch;
+        param->frameIn = inputFrame;
+        param->frameOut = inputFrame;
+        param->baseFps = m_encFps;
+        param->bOutOverwrite = false;
+        NVEncCtxAutoLock(cxtlock(m_dev->vidCtxLock()));
+        auto sts = filter->init(param, m_pLog);
+        if (sts != RGY_ERR_NONE) {
+            return sts;
+        }
+        //フィルタチェーンに追加
+        cufilters.push_back(std::move(filter));
+        //パラメータ情報を更新
+        m_pLastFilterParam = std::dynamic_pointer_cast<NVEncFilterParam>(param);
+        //入力フレーム情報を更新
+        inputFrame = param->frameOut;
+        m_encFps = param->baseFps;
+        return RGY_ERR_NONE;
+    }
+    //rtgmc shimmer repair
+    if (vppType == VppType::CL_RTGMC_SHIMMER_REPAIR
+        || vppType == VppType::CL_RTGMC_SHIMMER_REPAIR_REP1
+        || vppType == VppType::CL_RTGMC_SHIMMER_REPAIR_REP2) {
+        unique_ptr<NVEncFilter> filter(new NVEncFilterRtgmcShimmerRepair());
+        shared_ptr<NVEncFilterParamRtgmcShimmerRepair> param(new NVEncFilterParamRtgmcShimmerRepair());
+        const auto &shimmerRepair = (vppType == VppType::CL_RTGMC_SHIMMER_REPAIR_REP1)
+            ? inputParam->vpp.rtgmc_shimmer_repairRep1
+            : (vppType == VppType::CL_RTGMC_SHIMMER_REPAIR_REP2)
+                ? inputParam->vpp.rtgmc_shimmer_repairRep2
+                : inputParam->vpp.rtgmc_shimmer_repair;
+        param->stage = (shimmerRepair.stage == VppRtgmcShimmerRepairStage::Rep1)
+            ? RGYRtgmcShimmerRepairStage::PreRetouch
+            : RGYRtgmcShimmerRepairStage::PostTR2;
+        param->repairThin = shimmerRepair.repThin;
+        param->repairPad = shimmerRepair.repPad;
+        param->processChroma = shimmerRepair.repChroma;
+        param->frameIn = inputFrame;
+        param->frameOut = inputFrame;
+        param->baseFps = m_encFps;
+        param->bOutOverwrite = false;
+        NVEncCtxAutoLock(cxtlock(m_dev->vidCtxLock()));
+        auto sts = filter->init(param, m_pLog);
+        if (sts != RGY_ERR_NONE) {
+            return sts;
+        }
+        //フィルタチェーンに追加
+        cufilters.push_back(std::move(filter));
+        //パラメータ情報を更新
+        m_pLastFilterParam = std::dynamic_pointer_cast<NVEncFilterParam>(param);
+        //入力フレーム情報を更新
+        inputFrame = param->frameOut;
+        m_encFps = param->baseFps;
+        return RGY_ERR_NONE;
+    }
+    //rtgmc primitive
+    if (vppType == VppType::CL_RTGMC_PRIMITIVE) {
+        unique_ptr<NVEncFilter> filter(new NVEncFilterRtgmcPrimitive());
+        shared_ptr<NVEncFilterParamRtgmcPrimitive> param(new NVEncFilterParamRtgmcPrimitive());
+        switch (inputParam->vpp.rtgmc_primitive.op) {
+        case VppRtgmcPrimitiveOp::Copy:        param->op = RGYRtgmcPrimitiveOp::Copy; break;
+        case VppRtgmcPrimitiveOp::MakeDiff:    param->op = RGYRtgmcPrimitiveOp::MakeDiff; break;
+        case VppRtgmcPrimitiveOp::AddDiff:     param->op = RGYRtgmcPrimitiveOp::AddDiff; break;
+        case VppRtgmcPrimitiveOp::AddWeightedDiff: param->op = RGYRtgmcPrimitiveOp::AddWeightedDiff; break;
+        case VppRtgmcPrimitiveOp::RemoveGrain: param->op = RGYRtgmcPrimitiveOp::RemoveGrain; break;
+        case VppRtgmcPrimitiveOp::Repair:      param->op = RGYRtgmcPrimitiveOp::Repair; break;
+        case VppRtgmcPrimitiveOp::Merge:       param->op = RGYRtgmcPrimitiveOp::Merge; break;
+        case VppRtgmcPrimitiveOp::GaussResize: param->op = RGYRtgmcPrimitiveOp::GaussResize; break;
+        case VppRtgmcPrimitiveOp::VerticalMin5: param->op = RGYRtgmcPrimitiveOp::VerticalMin5; break;
+        case VppRtgmcPrimitiveOp::VerticalMax5: param->op = RGYRtgmcPrimitiveOp::VerticalMax5; break;
+        case VppRtgmcPrimitiveOp::LogicMin:    param->op = RGYRtgmcPrimitiveOp::LogicMin; break;
+        case VppRtgmcPrimitiveOp::LogicMax:    param->op = RGYRtgmcPrimitiveOp::LogicMax; break;
+        default:                               param->op = RGYRtgmcPrimitiveOp::Copy; break;
+        }
+        param->mode = inputParam->vpp.rtgmc_primitive.mode;
+        param->weight = inputParam->vpp.rtgmc_primitive.weight;
+        switch (inputParam->vpp.rtgmc_primitive.ref) {
+        case VppRtgmcPrimitiveRef::RemoveGrain20: param->refMode = RGYRtgmcPrimitiveRefMode::RemoveGrain20; break;
+        default:                                  param->refMode = RGYRtgmcPrimitiveRefMode::Disabled; break;
+        }
+        param->processChroma = inputParam->vpp.rtgmc_primitive.chroma;
+        param->frameIn = inputFrame;
+        param->frameOut = inputFrame;
+        param->baseFps = m_encFps;
+        param->bOutOverwrite = false;
+        NVEncCtxAutoLock(cxtlock(m_dev->vidCtxLock()));
+        auto sts = filter->init(param, m_pLog);
+        if (sts != RGY_ERR_NONE) {
+            return sts;
+        }
+        //フィルタチェーンに追加
+        cufilters.push_back(std::move(filter));
+        //パラメータ情報を更新
+        m_pLastFilterParam = std::dynamic_pointer_cast<NVEncFilterParam>(param);
+        //入力フレーム情報を更新
+        inputFrame = param->frameOut;
+        m_encFps = param->baseFps;
+        return RGY_ERR_NONE;
+    }
+    //ivtc
+    if (vppType == VppType::CL_IVTC) {
+        unique_ptr<NVEncFilter> filter(new NVEncFilterIvtc());
+        shared_ptr<NVEncFilterParamIvtc> param(new NVEncFilterParamIvtc());
+        param->ivtc = inputParam->vpp.ivtc;
+        if (inputParam->vpp.rff.enable && param->ivtc.expand < 0) {
+            param->ivtc.expand = 0;
+            PrintMes(RGY_LOG_DEBUG, _T("vpp-rff + vpp-ivtc: forcing ivtc expand=off (auto-disabled).\n"));
+        }
+        param->frameIn = inputFrame;
+        param->frameOut = inputFrame;
+        param->frameOut.picstruct = RGY_PICSTRUCT_FRAME;
+        param->baseFps = m_encFps;
+        param->timebase = m_outputTimebase;
+        if (auto pAVCodecReader = std::dynamic_pointer_cast<RGYInputAvcodec>(m_pFileReader); pAVCodecReader) {
+            param->inputIsAvcodecReader = true;
+            param->inputBPulldownDetected = pAVCodecReader->getPulldownDetected();
+        }
+        param->inputFilePath = inputParam->common.inputFilename;
+        param->trimOffset = m_trimParam.offset;
+        param->trimFrameCount = 0;
         param->bOutOverwrite = false;
         NVEncCtxAutoLock(cxtlock(m_dev->vidCtxLock()));
         auto sts = filter->init(param, m_pLog);
@@ -4028,6 +4492,29 @@ RGY_ERR NVEncCore::AddFilterCUDA(std::vector<std::unique_ptr<NVEncFilter>>& cufi
         m_encFps = param->baseFps;
         return RGY_ERR_NONE;
     }
+    //detailsharpen
+    if (vppType == VppType::CL_DETAILSHARPEN) {
+        unique_ptr<NVEncFilter> filter(new NVEncFilterDetailSharpen());
+        shared_ptr<NVEncFilterParamDetailSharpen> param(new NVEncFilterParamDetailSharpen());
+        param->detailsharpen = inputParam->vpp.detailsharpen;
+        param->frameIn = inputFrame;
+        param->frameOut = inputFrame;
+        param->baseFps = m_encFps;
+        param->bOutOverwrite = false;
+        NVEncCtxAutoLock(cxtlock(m_dev->vidCtxLock()));
+        auto sts = filter->init(param, m_pLog);
+        if (sts != RGY_ERR_NONE) {
+            return sts;
+        }
+        //フィルタチェーンに追加
+        cufilters.push_back(std::move(filter));
+        //パラメータ情報を更新
+        m_pLastFilterParam = std::dynamic_pointer_cast<NVEncFilterParam>(param);
+        //入力フレーム情報を更新
+        inputFrame = param->frameOut;
+        m_encFps = param->baseFps;
+        return RGY_ERR_NONE;
+    }
     //curves
     if (vppType == VppType::CL_CURVES) {
         unique_ptr<NVEncFilter> filter(new NVEncFilterCurves());
@@ -4037,6 +4524,30 @@ RGY_ERR NVEncCore::AddFilterCUDA(std::vector<std::unique_ptr<NVEncFilter>>& cufi
         param->frameOut = inputFrame;
         param->baseFps = m_encFps;
         param->bOutOverwrite = true;
+        NVEncCtxAutoLock(cxtlock(m_dev->vidCtxLock()));
+        auto sts = filter->init(param, m_pLog);
+        if (sts != RGY_ERR_NONE) {
+            return sts;
+        }
+        //フィルタチェーンに追加
+        cufilters.push_back(std::move(filter));
+        //パラメータ情報を更新
+        m_pLastFilterParam = std::dynamic_pointer_cast<NVEncFilterParam>(param);
+        //入力フレーム情報を更新
+        inputFrame = param->frameOut;
+        m_encFps = param->baseFps;
+        return RGY_ERR_NONE;
+    }
+    //softlight
+    if (vppType == VppType::CL_SOFTLIGHT) {
+        unique_ptr<NVEncFilter> filter(new NVEncFilterSoftLight());
+        shared_ptr<NVEncFilterParamSoftLight> param(new NVEncFilterParamSoftLight());
+        param->softlight = inputParam->vpp.softlight;
+        param->frameIn = inputFrame;
+        param->frameOut = inputFrame;
+        param->vuiInfo = vuiInfo;
+        param->baseFps = m_encFps;
+        param->bOutOverwrite = false;
         NVEncCtxAutoLock(cxtlock(m_dev->vidCtxLock()));
         auto sts = filter->init(param, m_pLog);
         if (sts != RGY_ERR_NONE) {
@@ -4460,7 +4971,7 @@ RGY_ERR NVEncCore::Init(InEncodeVideoParam *inputParam) {
             return err_to_rgy(NV_ENC_ERR_INVALID_CALL);
         }
     }
-    
+
     DeviceCodecCsp HWDecCodecCsp;
     auto deviceInfoCache = std::make_shared<NVEncDeviceInfoCache>();
     const auto deviceCacheLoadStart = std::chrono::steady_clock::now();
@@ -4927,7 +5438,7 @@ RGY_ERR NVEncCore::initPipeline(const InEncodeVideoParam *prm) {
         m_pipelineTasks.push_back(std::make_unique<PipelineTaskNVEncode>(m_dev.get(), m_encRunCtx.get(),
             codec_guid_enc_to_rgy(m_stCodecGUID), m_uEncWidth, m_uEncHeight, GetEncoderCSP(prm), GetEncoderBitDepth(prm), picstruct_enc_to_rgy(m_stPicStruct),
             m_stEncConfig, m_stCreateEncodeParams, m_timecode.get(), m_encTimestamp.get(), m_outputTimebase, m_hdr10plus.get(), m_dovirpu.get(),
-            m_dynamicRC, m_keyFile, m_keyOnChapter, m_Chapters, prm->ctrl.lowLatency, 1, prm->ctrl.threadParams.get(RGYThreadType::ENC), m_pLog));
+            m_dynamicRC, m_keyFile, m_keyOnChapter, m_Chapters, 1, prm->ctrl.threadParams.get(RGYThreadType::ENC), m_pLog));
         auto taskEnc = dynamic_cast<PipelineTaskNVEncode *>(m_pipelineTasks.back().get());
         if (taskLastCudaVpp) {
             taskLastCudaVpp->setEncodeTask(taskEnc);
@@ -5945,7 +6456,7 @@ NVENCSTATUS NVEncCore::Encode() {
                         continue;
                     }
                     return NV_ENC_SUCCESS;
-                } 
+                }
                 if (ifilter == 0) { //最初のフィルタなら転送なので、イベントをここでセットする
                     auto pCudaEvent = vInFrameTransferFin[nFilterFrame % vInFrameTransferFin.size()].get();
                     add_frame_transfer_data(pCudaEvent, inframe, deviceFrame);
