@@ -31,29 +31,35 @@
 #include "NVEncFilter.h"
 #include "rgy_prm.h"
 
-class NVEncFilterParamMsmooth : public NVEncFilterParam {
+class NVEncFilterParamChromaShift : public NVEncFilterParam {
 public:
-    VppMsmooth msmooth;
+    VppChromaShift chromashift;
 
-    NVEncFilterParamMsmooth() : msmooth() {};
-    virtual ~NVEncFilterParamMsmooth() {};
+    NVEncFilterParamChromaShift() : chromashift() {};
+    virtual ~NVEncFilterParamChromaShift() {};
     virtual tstring print() const override;
 };
 
-class NVEncFilterMsmooth : public NVEncFilter {
+class NVEncFilterChromaShift : public NVEncFilter {
 public:
-    NVEncFilterMsmooth();
-    virtual ~NVEncFilterMsmooth();
+    NVEncFilterChromaShift();
+    virtual ~NVEncFilterChromaShift();
     virtual RGY_ERR init(shared_ptr<NVEncFilterParam> pParam, shared_ptr<RGYLog> pPrintMes) override;
 protected:
     virtual RGY_ERR run_filter(const RGYFrameInfo *pInputFrame, RGYFrameInfo **ppOutputFrames, int *pOutputFrameNum, cudaStream_t stream) override;
     virtual void close() override;
-private:
-    RGY_ERR procPlaneBlurMask(RGYFrameInfo *pOutputFrame, const RGYFrameInfo *pInputFrame,
-        float threshold, bool highq, cudaStream_t stream);
-    RGY_ERR procPlaneSmooth(RGYFrameInfo *pOutputFrame, const RGYFrameInfo *pInputFrame, const RGYFrameInfo *pMaskFrame, cudaStream_t stream);
-    RGY_ERR procPlane(RGYFrameInfo *pOutputFrame, const RGYFrameInfo *pInputFrame, int ip, int strength, float threshold, bool highq, cudaStream_t stream);
-    RGY_ERR procFrame(RGYFrameInfo *pOutputFrame, const RGYFrameInfo *pInputFrame, cudaStream_t stream);
-    std::vector<std::unique_ptr<CUFrameBuf>> m_mask;
-    std::vector<std::unique_ptr<CUFrameBuf>> m_tmp[2];
+    RGY_ERR checkParam(const std::shared_ptr<NVEncFilterParamChromaShift> pParam);
+
+    std::unique_ptr<CUMemBuf> m_signY;
+    std::unique_ptr<CUMemBuf> m_signUV;
+    std::unique_ptr<CUMemBuf> m_statsBuf;
+    std::vector<int>          m_statsHost;
+    std::vector<double>       m_acceptedDx;
+    std::vector<double>       m_acceptedDy;
+    int                       m_seenAnalysisFrames;
+    int                       m_skippedAutoFrames;
+    int                       m_warmupSkippedFrames;
+    bool                      m_analysisComplete;
+    float                     m_resolvedShiftX;
+    float                     m_resolvedShiftY;
 };

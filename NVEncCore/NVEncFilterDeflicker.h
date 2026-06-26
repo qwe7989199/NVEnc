@@ -28,32 +28,42 @@
 
 #pragma once
 
+#include <deque>
 #include "NVEncFilter.h"
 #include "rgy_prm.h"
 
-class NVEncFilterParamMsmooth : public NVEncFilterParam {
+class NVEncFilterParamDeflicker : public NVEncFilterParam {
 public:
-    VppMsmooth msmooth;
+    VppDeflicker deflicker;
 
-    NVEncFilterParamMsmooth() : msmooth() {};
-    virtual ~NVEncFilterParamMsmooth() {};
+    NVEncFilterParamDeflicker() : deflicker() {};
+    virtual ~NVEncFilterParamDeflicker() {};
     virtual tstring print() const override;
 };
 
-class NVEncFilterMsmooth : public NVEncFilter {
+class NVEncFilterDeflicker : public NVEncFilter {
 public:
-    NVEncFilterMsmooth();
-    virtual ~NVEncFilterMsmooth();
+    NVEncFilterDeflicker();
+    virtual ~NVEncFilterDeflicker();
     virtual RGY_ERR init(shared_ptr<NVEncFilterParam> pParam, shared_ptr<RGYLog> pPrintMes) override;
 protected:
     virtual RGY_ERR run_filter(const RGYFrameInfo *pInputFrame, RGYFrameInfo **ppOutputFrames, int *pOutputFrameNum, cudaStream_t stream) override;
     virtual void close() override;
-private:
-    RGY_ERR procPlaneBlurMask(RGYFrameInfo *pOutputFrame, const RGYFrameInfo *pInputFrame,
-        float threshold, bool highq, cudaStream_t stream);
-    RGY_ERR procPlaneSmooth(RGYFrameInfo *pOutputFrame, const RGYFrameInfo *pInputFrame, const RGYFrameInfo *pMaskFrame, cudaStream_t stream);
-    RGY_ERR procPlane(RGYFrameInfo *pOutputFrame, const RGYFrameInfo *pInputFrame, int ip, int strength, float threshold, bool highq, cudaStream_t stream);
-    RGY_ERR procFrame(RGYFrameInfo *pOutputFrame, const RGYFrameInfo *pInputFrame, cudaStream_t stream);
-    std::vector<std::unique_ptr<CUFrameBuf>> m_mask;
-    std::vector<std::unique_ptr<CUFrameBuf>> m_tmp[2];
+    RGY_ERR checkParam(const std::shared_ptr<NVEncFilterParamDeflicker> pParam);
+
+    RGY_ERR computePlaneStats(const RGYFrameInfo *pPlane, double& meanOut, double& stddevOut, cudaStream_t stream);
+    RGY_ERR runApply(RGYFrameInfo *pDstPlane, const RGYFrameInfo *pSrcPlane,
+        float mult, float add, float blend, int is_chroma, cudaStream_t stream);
+
+    std::unique_ptr<CUMemBuf> m_sumBuf;
+    std::unique_ptr<CUMemBuf> m_sumSqBuf;
+    std::vector<int64_t>      m_sumHost;
+    std::vector<int64_t>      m_sumSqHost;
+    size_t                    m_statsBufWGCount;
+    std::deque<double>        m_rollingMeans;
+    std::deque<double>        m_rollingSigmas;
+    double                    m_prevMult;
+    double                    m_prevAdd;
+    bool                      m_haveDamping;
+    int                       m_skippedSceneFrames;
 };
