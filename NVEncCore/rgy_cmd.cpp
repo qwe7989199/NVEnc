@@ -508,8 +508,13 @@ int parse_one_vpp_option(const TCHAR *option_name, const TCHAR *strInput[], int 
             for (size_t ielem = 0; ielem < _countof(paramsResizeQSVEnc); ielem++) {
                 paramListResizeQSVEnc.push_back(paramsResizeQSVEnc[ielem]);
             }
+            std::vector<std::string> paramListResizeFsr1;
+            for (size_t ielem = 0; ielem < _countof(paramsResizeFsr1); ielem++) {
+                paramListResizeFsr1.push_back(paramsResizeFsr1[ielem]);
+            }
             std::vector<std::string> paramList = paramListResizeNVEnc;
             vector_cat(paramList, paramListResizeQSVEnc);
+            vector_cat(paramList, paramListResizeFsr1);
             for (size_t ielem = 0; ielem < _countof(paramsResizeLibPlacebo); ielem++) {
                 paramList.push_back(paramsResizeLibPlacebo[ielem]);
             }
@@ -579,6 +584,19 @@ int parse_one_vpp_option(const TCHAR *option_name, const TCHAR *strInput[], int 
                             vpp->resize_libplacebo.cplace = std::stoi(param_val);
                         } catch (...) {
                             print_cmd_error_invalid_value(tstring(option_name) + _T(" ") + param_arg + _T("="), param_val);
+                            return 1;
+                        }
+                        continue;
+                    }
+                    if (param_arg == _T("sharpness")) {
+                        try {
+                            vpp->resize_fsr1.sharpness = std::stof(param_val);
+                        } catch (...) {
+                            print_cmd_error_invalid_value(tstring(option_name) + _T(" ") + param_arg + _T("="), param_val);
+                            return 1;
+                        }
+                        if (vpp->resize_fsr1.sharpness < 0.0f || vpp->resize_fsr1.sharpness > 1.0f) {
+                            print_cmd_error_invalid_value(tstring(option_name) + _T(" ") + param_arg + _T("="), param_val, _T("sharpness should be 0.0 - 1.0."));
                             return 1;
                         }
                         continue;
@@ -4287,6 +4305,124 @@ int parse_one_vpp_option(const TCHAR *option_name, const TCHAR *strInput[], int 
         return 0;
     }
 
+    if (IS_OPTION("vpp-maa") && ENABLE_VPP_FILTER_MAA) {
+        vpp->maa.enable = true;
+        if (i + 1 >= nArgNum || strInput[i + 1][0] == _T('-')) {
+            return 0;
+        }
+        i++;
+        const auto paramList = std::vector<std::string>{ "enable", "ss", "aa", "aac", "mask", "mthresh", "chroma", "show", "edge" };
+
+        bool aacUserSet = false;
+        bool aaUserSet = false;
+
+        for (const auto &param : split(strInput[i], _T(","))) {
+            auto pos = param.find_first_of(_T("="));
+            if (pos != std::string::npos) {
+                auto param_arg = param.substr(0, pos);
+                auto param_val = param.substr(pos + 1);
+                param_arg = tolowercase(param_arg);
+                if (param_arg == _T("enable")) {
+                    bool b = false;
+                    if (!cmd_string_to_bool(&b, param_val)) {
+                        vpp->maa.enable = b;
+                    } else {
+                        print_cmd_error_invalid_value(tstring(option_name) + _T(" ") + param_arg + _T("="), param_val);
+                        return 1;
+                    }
+                    continue;
+                }
+                if (param_arg == _T("ss")) {
+                    try {
+                        vpp->maa.ss = std::stof(param_val);
+                    } catch (...) {
+                        print_cmd_error_invalid_value(tstring(option_name) + _T(" ") + param_arg + _T("="), param_val);
+                        return 1;
+                    }
+                    continue;
+                }
+                if (param_arg == _T("aa")) {
+                    try {
+                        vpp->maa.aa = std::stoi(param_val);
+                        aaUserSet = true;
+                    } catch (...) {
+                        print_cmd_error_invalid_value(tstring(option_name) + _T(" ") + param_arg + _T("="), param_val);
+                        return 1;
+                    }
+                    continue;
+                }
+                if (param_arg == _T("aac")) {
+                    try {
+                        vpp->maa.aac = std::stoi(param_val);
+                        aacUserSet = true;
+                    } catch (...) {
+                        print_cmd_error_invalid_value(tstring(option_name) + _T(" ") + param_arg + _T("="), param_val);
+                        return 1;
+                    }
+                    continue;
+                }
+                if (param_arg == _T("mask")) {
+                    bool b = false;
+                    if (!cmd_string_to_bool(&b, param_val)) {
+                        vpp->maa.mask = b;
+                    } else {
+                        print_cmd_error_invalid_value(tstring(option_name) + _T(" ") + param_arg + _T("="), param_val, _T("Supported values: on, off, true, false."));
+                        return 1;
+                    }
+                    continue;
+                }
+                if (param_arg == _T("mthresh")) {
+                    try {
+                        vpp->maa.mthresh = std::stoi(param_val);
+                    } catch (...) {
+                        print_cmd_error_invalid_value(tstring(option_name) + _T(" ") + param_arg + _T("="), param_val);
+                        return 1;
+                    }
+                    continue;
+                }
+                if (param_arg == _T("chroma")) {
+                    bool b = false;
+                    if (!cmd_string_to_bool(&b, param_val)) {
+                        vpp->maa.chroma = b;
+                    } else {
+                        print_cmd_error_invalid_value(tstring(option_name) + _T(" ") + param_arg + _T("="), param_val, _T("Supported values: on, off, true, false."));
+                        return 1;
+                    }
+                    continue;
+                }
+                if (param_arg == _T("show")) {
+                    try {
+                        vpp->maa.show = std::stoi(param_val);
+                    } catch (...) {
+                        print_cmd_error_invalid_value(tstring(option_name) + _T(" ") + param_arg + _T("="), param_val);
+                        return 1;
+                    }
+                    continue;
+                }
+                if (param_arg == _T("edge")) {
+                    const auto edge = tolowercase(param_val);
+                    if (edge == _T("sobel") || edge == _T("prewitt") || edge == _T("sobel_full") || edge == _T("scharr") || edge == _T("kirsch") || edge == _T("laplacian")) {
+                        vpp->maa.edge = edge;
+                    } else {
+                        print_cmd_error_invalid_value(tstring(option_name) + _T(" ") + param_arg + _T("="), param_val);
+                        return 1;
+                    }
+                    continue;
+                }
+                print_cmd_error_unknown_opt_param(option_name, param_arg, paramList);
+                return 1;
+            } else {
+                print_cmd_error_unknown_opt_param(option_name, param, paramList);
+                return 1;
+            }
+        }
+
+        if (aaUserSet && !aacUserSet) {
+            vpp->maa.aac = std::max(0, vpp->maa.aa - 8);
+        }
+        return 0;
+    }
+
     if (IS_OPTION("vpp-decomb") && ENABLE_VPP_FILTER_DECOMB) {
         vpp->decomb.enable = true;
         if (i + 1 >= nArgNum || strInput[i + 1][0] == _T('-')) {
@@ -4934,7 +5070,7 @@ int parse_one_vpp_option(const TCHAR *option_name, const TCHAR *strInput[], int 
         }
         i++;
 
-        const auto paramList = std::vector<std::string>{ "sigma", "patch", "search", "h", "fp16", "shared_mem" };
+        const auto paramList = std::vector<std::string>{ "sigma", "patch", "search", "h", "d", "search_t", "fp16", "shared_mem" };
 
         for (const auto& param : split(strInput[i], _T(","))) {
             auto pos = param.find_first_of(_T("="));
@@ -4982,6 +5118,24 @@ int parse_one_vpp_option(const TCHAR *option_name, const TCHAR *strInput[], int 
                 if (param_arg == _T("h")) {
                     try {
                         vpp->nlmeans.h = std::stof(param_val);
+                    } catch (...) {
+                        print_cmd_error_invalid_value(tstring(option_name) + _T(" ") + param_arg + _T("="), param_val);
+                        return 1;
+                    }
+                    continue;
+                }
+                if (param_arg == _T("d")) {
+                    try {
+                        vpp->nlmeans.d = std::stoi(param_val);
+                    } catch (...) {
+                        print_cmd_error_invalid_value(tstring(option_name) + _T(" ") + param_arg + _T("="), param_val);
+                        return 1;
+                    }
+                    continue;
+                }
+                if (param_arg == _T("search_t")) {
+                    try {
+                        vpp->nlmeans.searchSizeT = std::stoi(param_val);
                     } catch (...) {
                         print_cmd_error_invalid_value(tstring(option_name) + _T(" ") + param_arg + _T("="), param_val);
                         return 1;
@@ -5089,6 +5243,168 @@ int parse_one_vpp_option(const TCHAR *option_name, const TCHAR *strInput[], int 
                 print_cmd_error_unknown_opt_param(option_name, param, paramList);
                 return 1;
             }
+        }
+        return 0;
+    }
+    if (IS_OPTION("vpp-hqdn3d") && ENABLE_VPP_FILTER_HQDN3D) {
+        vpp->hqdn3d.enable = true;
+        if (i + 1 >= nArgNum || strInput[i + 1][0] == _T('-')) {
+            return 0;
+        }
+        i++;
+
+        const auto paramList = std::vector<std::string>{ "luma_spatial", "chroma_spatial", "luma_temporal", "chroma_temporal" };
+
+        for (const auto& param : split(strInput[i], _T(","))) {
+            auto pos = param.find_first_of(_T("="));
+            if (pos != std::string::npos) {
+                auto param_arg = param.substr(0, pos);
+                auto param_val = param.substr(pos + 1);
+                param_arg = tolowercase(param_arg);
+                if (param_arg == _T("enable")) {
+                    bool b = false;
+                    if (!cmd_string_to_bool(&b, param_val)) {
+                        vpp->hqdn3d.enable = b;
+                    } else {
+                        print_cmd_error_invalid_value(tstring(option_name) + _T(" ") + param_arg + _T("="), param_val);
+                        return 1;
+                    }
+                    continue;
+                }
+                if (param_arg == _T("luma_spatial")) {
+                    try {
+                        vpp->hqdn3d.luma_spatial = std::stof(param_val);
+                    } catch (...) {
+                        print_cmd_error_invalid_value(tstring(option_name) + _T(" ") + param_arg + _T("="), param_val);
+                        return 1;
+                    }
+                    continue;
+                }
+                if (param_arg == _T("chroma_spatial")) {
+                    try {
+                        vpp->hqdn3d.chroma_spatial = std::stof(param_val);
+                    } catch (...) {
+                        print_cmd_error_invalid_value(tstring(option_name) + _T(" ") + param_arg + _T("="), param_val);
+                        return 1;
+                    }
+                    continue;
+                }
+                if (param_arg == _T("luma_temporal")) {
+                    try {
+                        vpp->hqdn3d.luma_temporal = std::stof(param_val);
+                    } catch (...) {
+                        print_cmd_error_invalid_value(tstring(option_name) + _T(" ") + param_arg + _T("="), param_val);
+                        return 1;
+                    }
+                    continue;
+                }
+                if (param_arg == _T("chroma_temporal")) {
+                    try {
+                        vpp->hqdn3d.chroma_temporal = std::stof(param_val);
+                    } catch (...) {
+                        print_cmd_error_invalid_value(tstring(option_name) + _T(" ") + param_arg + _T("="), param_val);
+                        return 1;
+                    }
+                    continue;
+                }
+                print_cmd_error_unknown_opt_param(option_name, param_arg, paramList);
+                return 1;
+            } else {
+                print_cmd_error_unknown_opt_param(option_name, param, paramList);
+                return 1;
+            }
+        }
+        return 0;
+    }
+    if (IS_OPTION("vpp-descale") && ENABLE_VPP_FILTER_DESCALE) {
+        vpp->descale.enable = true;
+        if (i + 1 >= nArgNum || strInput[i + 1][0] == _T('-')) {
+            return 0;
+        }
+        i++;
+        const auto paramList = std::vector<std::string>{
+            "enable", "kernel", "width", "height", "b", "c", "src_left", "src_top",
+            "border_handling", "border", "auto", "search_min", "search_max", "search_step",
+            "detect_frames", "show_scores"
+        };
+        for (const auto &param : split(strInput[i], _T(","))) {
+            auto pos = param.find_first_of(_T("="));
+            if (pos == std::string::npos) {
+                print_cmd_error_unknown_opt_param(option_name, param, paramList);
+                return 1;
+            }
+            auto param_arg = tolowercase(param.substr(0, pos));
+            auto param_val = param.substr(pos + 1);
+            if (param_arg == _T("enable")) {
+                bool b = false;
+                if (!cmd_string_to_bool(&b, param_val)) {
+                    vpp->descale.enable = b;
+                } else {
+                    print_cmd_error_invalid_value(tstring(option_name) + _T(" ") + param_arg + _T("="), param_val);
+                    return 1;
+                }
+                continue;
+            }
+            if (param_arg == _T("kernel")) {
+                int value = 0;
+                if (get_list_value(list_vpp_descale_kernel, param_val.c_str(), &value)) {
+                    vpp->descale.kernel = (VppDescaleKernel)value;
+                } else {
+                    print_cmd_error_invalid_value(tstring(option_name) + _T(" ") + param_arg + _T("="), param_val, list_vpp_descale_kernel);
+                    return 1;
+                }
+                continue;
+            }
+            if (param_arg == _T("border_handling") || param_arg == _T("border")) {
+                int value = 0;
+                if (get_list_value(list_vpp_descale_border, param_val.c_str(), &value)) {
+                    vpp->descale.border = (VppDescaleBorder)value;
+                } else {
+                    print_cmd_error_invalid_value(tstring(option_name) + _T(" ") + param_arg + _T("="), param_val, list_vpp_descale_border);
+                    return 1;
+                }
+                continue;
+            }
+            int *int_target = nullptr;
+            float *float_target = nullptr;
+            bool *bool_target = nullptr;
+            if      (param_arg == _T("width"))         int_target = &vpp->descale.width;
+            else if (param_arg == _T("height"))        int_target = &vpp->descale.height;
+            else if (param_arg == _T("search_min"))    int_target = &vpp->descale.search_min;
+            else if (param_arg == _T("search_max"))    int_target = &vpp->descale.search_max;
+            else if (param_arg == _T("search_step"))   int_target = &vpp->descale.search_step;
+            else if (param_arg == _T("detect_frames")) int_target = &vpp->descale.detect_frames;
+            else if (param_arg == _T("b"))             float_target = &vpp->descale.b;
+            else if (param_arg == _T("c"))             float_target = &vpp->descale.c;
+            else if (param_arg == _T("src_left"))      float_target = &vpp->descale.src_left;
+            else if (param_arg == _T("src_top"))       float_target = &vpp->descale.src_top;
+            else if (param_arg == _T("auto"))          bool_target = &vpp->descale.autoDetect;
+            else if (param_arg == _T("show_scores"))   bool_target = &vpp->descale.show_scores;
+            if (int_target) {
+                try { *int_target = std::stoi(param_val); }
+                catch (...) { print_cmd_error_invalid_value(tstring(option_name) + _T(" ") + param_arg + _T("="), param_val); return 1; }
+                continue;
+            }
+            if (float_target) {
+                try { *float_target = std::stof(param_val); }
+                catch (...) { print_cmd_error_invalid_value(tstring(option_name) + _T(" ") + param_arg + _T("="), param_val); return 1; }
+                continue;
+            }
+            if (bool_target) {
+                bool b = false;
+                if (!cmd_string_to_bool(&b, param_val)) {
+                    *bool_target = b;
+                } else {
+                    print_cmd_error_invalid_value(tstring(option_name) + _T(" ") + param_arg + _T("="), param_val);
+                    return 1;
+                }
+                continue;
+            }
+            print_cmd_error_unknown_opt_param(option_name, param_arg, paramList);
+            return 1;
+        }
+        if (vpp->descale.autoDetect) {
+            vpp->descale.kernel = VppDescaleKernel::Auto;
         }
         return 0;
     }
@@ -5780,7 +6096,7 @@ int parse_one_vpp_option(const TCHAR *option_name, const TCHAR *strInput[], int 
             return 0;
         }
         i++;
-        const auto paramList = std::vector<std::string>{ "strength", "threshold", "highq", "mask" };
+        const auto paramList = std::vector<std::string>{ "strength", "threshold", "threshold_c", "highq", "mask" };
         for (const auto& param : split(strInput[i], _T(","))) {
             auto pos = param.find_first_of(_T("="));
             if (pos != std::string::npos) {
@@ -5809,6 +6125,15 @@ int parse_one_vpp_option(const TCHAR *option_name, const TCHAR *strInput[], int 
                 if (param_arg == _T("threshold")) {
                     try {
                         vpp->msmooth.threshold = std::stof(param_val);
+                    } catch (...) {
+                        print_cmd_error_invalid_value(tstring(option_name) + _T(" ") + param_arg + _T("="), param_val);
+                        return 1;
+                    }
+                    continue;
+                }
+                if (param_arg == _T("threshold_c")) {
+                    try {
+                        vpp->msmooth.threshold_c = std::stof(param_val);
                     } catch (...) {
                         print_cmd_error_invalid_value(tstring(option_name) + _T(" ") + param_arg + _T("="), param_val);
                         return 1;
@@ -6258,6 +6583,533 @@ int parse_one_vpp_option(const TCHAR *option_name, const TCHAR *strInput[], int 
         }
         return 0;
     }
+    if (IS_OPTION("vpp-vinverse") && ENABLE_VPP_FILTER_VINVERSE) {
+        vpp->vinverse.enable = true;
+        if (i + 1 >= nArgNum || strInput[i + 1][0] == _T('-')) {
+            return 0;
+        }
+        i++;
+        const auto paramList = std::vector<std::string>{ "enable", "mode", "sstr", "amnt", "scl", "thr", "chroma" };
+        for (const auto &param : split(strInput[i], _T(","))) {
+            auto pos = param.find_first_of(_T("="));
+            if (pos != std::string::npos) {
+                auto param_arg = tolowercase(param.substr(0, pos));
+                auto param_val = param.substr(pos + 1);
+                if (param_arg == _T("enable")) {
+                    bool b = false;
+                    if (!cmd_string_to_bool(&b, param_val)) {
+                        vpp->vinverse.enable = b;
+                    } else {
+                        print_cmd_error_invalid_value(tstring(option_name) + _T(" ") + param_arg + _T("="), param_val);
+                        return 1;
+                    }
+                    continue;
+                }
+                if (param_arg == _T("mode")) {
+                    int value = 0;
+                    if (get_list_value(list_vpp_vinverse_mode, param_val.c_str(), &value)) {
+                        vpp->vinverse.mode = (VppVinverseMode)value;
+                    } else {
+                        print_cmd_error_invalid_value(tstring(option_name) + _T(" ") + param_arg + _T("="), param_val, list_vpp_vinverse_mode);
+                        return 1;
+                    }
+                    continue;
+                }
+                if (param_arg == _T("sstr")) {
+                    try {
+                        vpp->vinverse.sstr = std::stof(param_val);
+                    } catch (...) {
+                        print_cmd_error_invalid_value(tstring(option_name) + _T(" ") + param_arg + _T("="), param_val);
+                        return 1;
+                    }
+                    continue;
+                }
+                if (param_arg == _T("amnt")) {
+                    try {
+                        vpp->vinverse.amnt = std::stof(param_val);
+                    } catch (...) {
+                        print_cmd_error_invalid_value(tstring(option_name) + _T(" ") + param_arg + _T("="), param_val);
+                        return 1;
+                    }
+                    continue;
+                }
+                if (param_arg == _T("scl")) {
+                    try {
+                        vpp->vinverse.scl = std::stof(param_val);
+                    } catch (...) {
+                        print_cmd_error_invalid_value(tstring(option_name) + _T(" ") + param_arg + _T("="), param_val);
+                        return 1;
+                    }
+                    continue;
+                }
+                if (param_arg == _T("thr")) {
+                    try {
+                        vpp->vinverse.thr = std::stof(param_val);
+                    } catch (...) {
+                        print_cmd_error_invalid_value(tstring(option_name) + _T(" ") + param_arg + _T("="), param_val);
+                        return 1;
+                    }
+                    continue;
+                }
+                if (param_arg == _T("chroma")) {
+                    bool b = false;
+                    if (!cmd_string_to_bool(&b, param_val)) {
+                        vpp->vinverse.chroma = b;
+                    } else {
+                        print_cmd_error_invalid_value(tstring(option_name) + _T(" ") + param_arg + _T("="), param_val);
+                        return 1;
+                    }
+                    continue;
+                }
+                print_cmd_error_unknown_opt_param(option_name, param_arg, paramList);
+                return 1;
+            }
+        }
+        return 0;
+    }
+    if (IS_OPTION("vpp-chromashift") && ENABLE_VPP_FILTER_CHROMASHIFT) {
+        vpp->chromashift.enable = true;
+        if (i + 1 >= nArgNum || strInput[i + 1][0] == _T('-')) {
+            return 0;
+        }
+        i++;
+        const auto paramList = std::vector<std::string>{ "enable", "x", "y", "show", "auto", "auto_detect", "auto_frames", "auto_min_pairs" };
+        for (const auto &param : split(strInput[i], _T(","))) {
+            auto pos = param.find_first_of(_T("="));
+            if (pos != std::string::npos) {
+                auto param_arg = tolowercase(param.substr(0, pos));
+                auto param_val = param.substr(pos + 1);
+                if (param_arg == _T("enable")) {
+                    bool b = false;
+                    if (!cmd_string_to_bool(&b, param_val)) {
+                        vpp->chromashift.enable = b;
+                    } else {
+                        print_cmd_error_invalid_value(tstring(option_name) + _T(" ") + param_arg + _T("="), param_val);
+                        return 1;
+                    }
+                    continue;
+                }
+                if (param_arg == _T("x")) {
+                    try {
+                        vpp->chromashift.x = std::stof(param_val);
+                    } catch (...) {
+                        print_cmd_error_invalid_value(tstring(option_name) + _T(" ") + param_arg + _T("="), param_val);
+                        return 1;
+                    }
+                    continue;
+                }
+                if (param_arg == _T("y")) {
+                    try {
+                        vpp->chromashift.y = std::stof(param_val);
+                    } catch (...) {
+                        print_cmd_error_invalid_value(tstring(option_name) + _T(" ") + param_arg + _T("="), param_val);
+                        return 1;
+                    }
+                    continue;
+                }
+                if (param_arg == _T("show")) {
+                    const auto show = tolowercase(param_val);
+                    if (show == _T("normal") || show == _T("none") || show == _T("0")) {
+                        vpp->chromashift.show = 0;
+                    } else if (show == _T("laplacian") || show == _T("lap") || show == _T("1")) {
+                        vpp->chromashift.show = 1;
+                    } else {
+                        print_cmd_error_invalid_value(tstring(option_name) + _T(" ") + param_arg + _T("="), param_val);
+                        return 1;
+                    }
+                    continue;
+                }
+                if (param_arg == _T("auto") || param_arg == _T("auto_detect")) {
+                    bool b = false;
+                    if (!cmd_string_to_bool(&b, param_val)) {
+                        vpp->chromashift.auto_detect = b;
+                    } else {
+                        print_cmd_error_invalid_value(tstring(option_name) + _T(" ") + param_arg + _T("="), param_val);
+                        return 1;
+                    }
+                    continue;
+                }
+                if (param_arg == _T("auto_frames")) {
+                    try {
+                        vpp->chromashift.auto_frames = std::stoi(param_val);
+                    } catch (...) {
+                        print_cmd_error_invalid_value(tstring(option_name) + _T(" ") + param_arg + _T("="), param_val);
+                        return 1;
+                    }
+                    continue;
+                }
+                if (param_arg == _T("auto_min_pairs")) {
+                    try {
+                        vpp->chromashift.auto_min_pairs = std::stoi(param_val);
+                    } catch (...) {
+                        print_cmd_error_invalid_value(tstring(option_name) + _T(" ") + param_arg + _T("="), param_val);
+                        return 1;
+                    }
+                    continue;
+                }
+                print_cmd_error_unknown_opt_param(option_name, param_arg, paramList);
+                return 1;
+            }
+        }
+        return 0;
+    }
+    if (IS_OPTION("vpp-deblock") && ENABLE_VPP_FILTER_DEBLOCK) {
+        vpp->deblock.enable = true;
+        if (i + 1 >= nArgNum || strInput[i + 1][0] == _T('-')) {
+            return 0;
+        }
+        i++;
+        const auto paramList = std::vector<std::string>{ "enable", "qp", "alpha", "beta", "chroma" };
+        for (const auto &param : split(strInput[i], _T(","))) {
+            auto pos = param.find_first_of(_T("="));
+            if (pos != std::string::npos) {
+                auto param_arg = tolowercase(param.substr(0, pos));
+                auto param_val = param.substr(pos + 1);
+                if (param_arg == _T("enable")) {
+                    bool b = false;
+                    if (!cmd_string_to_bool(&b, param_val)) {
+                        vpp->deblock.enable = b;
+                    } else {
+                        print_cmd_error_invalid_value(tstring(option_name) + _T(" ") + param_arg + _T("="), param_val);
+                        return 1;
+                    }
+                    continue;
+                }
+                if (param_arg == _T("qp")) {
+                    try {
+                        vpp->deblock.qp = std::stoi(param_val);
+                    } catch (...) {
+                        print_cmd_error_invalid_value(tstring(option_name) + _T(" ") + param_arg + _T("="), param_val);
+                        return 1;
+                    }
+                    continue;
+                }
+                if (param_arg == _T("alpha")) {
+                    try {
+                        vpp->deblock.alpha = std::stoi(param_val);
+                    } catch (...) {
+                        print_cmd_error_invalid_value(tstring(option_name) + _T(" ") + param_arg + _T("="), param_val);
+                        return 1;
+                    }
+                    continue;
+                }
+                if (param_arg == _T("beta")) {
+                    try {
+                        vpp->deblock.beta = std::stoi(param_val);
+                    } catch (...) {
+                        print_cmd_error_invalid_value(tstring(option_name) + _T(" ") + param_arg + _T("="), param_val);
+                        return 1;
+                    }
+                    continue;
+                }
+                if (param_arg == _T("chroma")) {
+                    bool b = false;
+                    if (!cmd_string_to_bool(&b, param_val)) {
+                        vpp->deblock.chroma = b;
+                    } else {
+                        print_cmd_error_invalid_value(tstring(option_name) + _T(" ") + param_arg + _T("="), param_val);
+                        return 1;
+                    }
+                    continue;
+                }
+                print_cmd_error_unknown_opt_param(option_name, param_arg, paramList);
+                return 1;
+            }
+        }
+        return 0;
+    }
+    if (IS_OPTION("vpp-deflicker") && ENABLE_VPP_FILTER_DEFLICKER) {
+        vpp->deflicker.enable = true;
+        if (i + 1 >= nArgNum || strInput[i + 1][0] == _T('-')) {
+            return 0;
+        }
+        i++;
+        const auto paramList = std::vector<std::string>{ "enable", "strength", "damping", "scene_threshold", "frames", "predictor", "chroma" };
+        for (const auto &param : split(strInput[i], _T(","))) {
+            auto pos = param.find_first_of(_T("="));
+            if (pos != std::string::npos) {
+                auto param_arg = tolowercase(param.substr(0, pos));
+                auto param_val = param.substr(pos + 1);
+                if (param_arg == _T("enable")) {
+                    bool b = false;
+                    if (!cmd_string_to_bool(&b, param_val)) {
+                        vpp->deflicker.enable = b;
+                    } else {
+                        print_cmd_error_invalid_value(tstring(option_name) + _T(" ") + param_arg + _T("="), param_val);
+                        return 1;
+                    }
+                    continue;
+                }
+                if (param_arg == _T("strength")) {
+                    try {
+                        vpp->deflicker.strength = std::stof(param_val);
+                    } catch (...) {
+                        print_cmd_error_invalid_value(tstring(option_name) + _T(" ") + param_arg + _T("="), param_val);
+                        return 1;
+                    }
+                    continue;
+                }
+                if (param_arg == _T("damping")) {
+                    try {
+                        vpp->deflicker.damping = std::stof(param_val);
+                    } catch (...) {
+                        print_cmd_error_invalid_value(tstring(option_name) + _T(" ") + param_arg + _T("="), param_val);
+                        return 1;
+                    }
+                    continue;
+                }
+                if (param_arg == _T("scene_threshold")) {
+                    try {
+                        vpp->deflicker.scene_threshold = std::stof(param_val);
+                    } catch (...) {
+                        print_cmd_error_invalid_value(tstring(option_name) + _T(" ") + param_arg + _T("="), param_val);
+                        return 1;
+                    }
+                    continue;
+                }
+                if (param_arg == _T("frames")) {
+                    try {
+                        vpp->deflicker.frames = std::stoi(param_val);
+                    } catch (...) {
+                        print_cmd_error_invalid_value(tstring(option_name) + _T(" ") + param_arg + _T("="), param_val);
+                        return 1;
+                    }
+                    continue;
+                }
+                if (param_arg == _T("predictor")) {
+                    bool b = false;
+                    if (!cmd_string_to_bool(&b, param_val)) {
+                        vpp->deflicker.predictor = b;
+                    } else {
+                        print_cmd_error_invalid_value(tstring(option_name) + _T(" ") + param_arg + _T("="), param_val);
+                        return 1;
+                    }
+                    continue;
+                }
+                if (param_arg == _T("chroma")) {
+                    bool b = false;
+                    if (!cmd_string_to_bool(&b, param_val)) {
+                        vpp->deflicker.chroma = b;
+                    } else {
+                        print_cmd_error_invalid_value(tstring(option_name) + _T(" ") + param_arg + _T("="), param_val);
+                        return 1;
+                    }
+                    continue;
+                }
+                print_cmd_error_unknown_opt_param(option_name, param_arg, paramList);
+                return 1;
+            }
+        }
+        return 0;
+    }
+    if (IS_OPTION("vpp-stab") && ENABLE_VPP_FILTER_STAB) {
+        vpp->stab.enable = true;
+        if (i + 1 >= nArgNum || strInput[i + 1][0] == _T('-')) {
+            return 0;
+        }
+        i++;
+        const auto paramList = std::vector<std::string>{ "enable", "strength", "damping", "trust", "trust_threshold", "max_shift", "border" };
+        for (const auto &param : split(strInput[i], _T(","))) {
+            auto pos = param.find_first_of(_T("="));
+            if (pos != std::string::npos) {
+                auto param_arg = tolowercase(param.substr(0, pos));
+                auto param_val = param.substr(pos + 1);
+                if (param_arg == _T("enable")) {
+                    bool b = false;
+                    if (!cmd_string_to_bool(&b, param_val)) {
+                        vpp->stab.enable = b;
+                    } else {
+                        print_cmd_error_invalid_value(tstring(option_name) + _T(" ") + param_arg + _T("="), param_val);
+                        return 1;
+                    }
+                    continue;
+                }
+                if (param_arg == _T("strength")) {
+                    try { vpp->stab.strength = std::stof(param_val); } catch (...) { print_cmd_error_invalid_value(tstring(option_name) + _T(" ") + param_arg + _T("="), param_val); return 1; }
+                    continue;
+                }
+                if (param_arg == _T("damping")) {
+                    try { vpp->stab.damping = std::stof(param_val); } catch (...) { print_cmd_error_invalid_value(tstring(option_name) + _T(" ") + param_arg + _T("="), param_val); return 1; }
+                    continue;
+                }
+                if (param_arg == _T("trust") || param_arg == _T("trust_threshold")) {
+                    try { vpp->stab.trust_threshold = std::stof(param_val); } catch (...) { print_cmd_error_invalid_value(tstring(option_name) + _T(" ") + param_arg + _T("="), param_val); return 1; }
+                    continue;
+                }
+                if (param_arg == _T("max_shift")) {
+                    try { vpp->stab.max_shift = std::stof(param_val); } catch (...) { print_cmd_error_invalid_value(tstring(option_name) + _T(" ") + param_arg + _T("="), param_val); return 1; }
+                    continue;
+                }
+                if (param_arg == _T("border")) {
+                    const auto border = tolowercase(param_val);
+                    if (border == _T("black")) {
+                        vpp->stab.border = VPP_STAB_BORDER_BLACK;
+                    } else if (border == _T("clamp")) {
+                        vpp->stab.border = VPP_STAB_BORDER_CLAMP;
+                    } else if (border == _T("mirror")) {
+                        vpp->stab.border = VPP_STAB_BORDER_MIRROR;
+                    } else {
+                        print_cmd_error_invalid_value(tstring(option_name) + _T(" ") + param_arg + _T("="), param_val);
+                        return 1;
+                    }
+                    continue;
+                }
+                print_cmd_error_unknown_opt_param(option_name, param_arg, paramList);
+                return 1;
+            } else {
+                print_cmd_error_unknown_opt_param(option_name, param, paramList);
+                return 1;
+            }
+        }
+        return 0;
+    }
+    if (IS_OPTION("vpp-colorfix") && ENABLE_VPP_FILTER_COLORFIX) {
+        vpp->colorfix.enable = true;
+        if (i + 1 >= nArgNum || strInput[i + 1][0] == _T('-')) {
+            return 0;
+        }
+        i++;
+        const auto paramList = std::vector<std::string>{ "enable", "mode", "space", "matrix", "white", "black", "white_r", "white_g", "white_b", "black_r", "black_g", "black_b", "frames", "strength", "variance_threshold" };
+        auto parse_color = [&](const tstring& value, int& r, int& g, int& b) {
+            auto v = tolowercase(value);
+            if (v.size() == 7 && v[0] == _T('#')) {
+                v = v.substr(1);
+            }
+            if (v.size() == 6 && v.find_first_not_of(_T("0123456789abcdef")) == tstring::npos) {
+                const int rgb = std::stoi(v, nullptr, 16);
+                r = (rgb >> 16) & 0xff;
+                g = (rgb >> 8) & 0xff;
+                b = rgb & 0xff;
+                return true;
+            }
+            const auto values = split(value, _T(":"));
+            if (values.size() == 3) {
+                try {
+                    r = std::stoi(values[0]);
+                    g = std::stoi(values[1]);
+                    b = std::stoi(values[2]);
+                } catch (...) {
+                    return false;
+                }
+                return 0 <= r && r <= 255 && 0 <= g && g <= 255 && 0 <= b && b <= 255;
+            }
+            return false;
+        };
+        for (const auto &param : split(strInput[i], _T(","))) {
+            auto pos = param.find_first_of(_T("="));
+            if (pos != std::string::npos) {
+                auto param_arg = tolowercase(param.substr(0, pos));
+                auto param_val = param.substr(pos + 1);
+                if (param_arg == _T("enable")) {
+                    bool b = false;
+                    if (!cmd_string_to_bool(&b, param_val)) {
+                        vpp->colorfix.enable = b;
+                    } else {
+                        print_cmd_error_invalid_value(tstring(option_name) + _T(" ") + param_arg + _T("="), param_val);
+                        return 1;
+                    }
+                    continue;
+                }
+                if (param_arg == _T("mode")) {
+                    const auto mode = tolowercase(param_val);
+                    if (mode == _T("manual") || mode == _T("0")) {
+                        vpp->colorfix.mode = VPP_COLORFIX_MODE_MANUAL;
+                    } else if (mode == _T("auto") || mode == _T("1")) {
+                        vpp->colorfix.mode = VPP_COLORFIX_MODE_AUTO;
+                    } else if (mode == _T("gray") || mode == _T("grayworld") || mode == _T("2")) {
+                        vpp->colorfix.mode = VPP_COLORFIX_MODE_GRAY;
+                    } else {
+                        print_cmd_error_invalid_value(tstring(option_name) + _T(" ") + param_arg + _T("="), param_val);
+                        return 1;
+                    }
+                    continue;
+                }
+                if (param_arg == _T("space")) {
+                    const auto space = tolowercase(param_val);
+                    if (space == _T("auto") || space == _T("0")) {
+                        vpp->colorfix.space = VPP_COLORFIX_SPACE_AUTO;
+                    } else if (space == _T("rgb") || space == _T("1")) {
+                        vpp->colorfix.space = VPP_COLORFIX_SPACE_RGB;
+                    } else if (space == _T("yuv") || space == _T("2")) {
+                        vpp->colorfix.space = VPP_COLORFIX_SPACE_YUV;
+                    } else {
+                        print_cmd_error_invalid_value(tstring(option_name) + _T(" ") + param_arg + _T("="), param_val);
+                        return 1;
+                    }
+                    continue;
+                }
+                if (param_arg == _T("matrix")) {
+                    const auto matrix = tolowercase(param_val);
+                    if (matrix == _T("auto") || matrix == _T("0")) {
+                        vpp->colorfix.matrix = VPP_COLORFIX_MATRIX_AUTO;
+                    } else if (matrix == _T("bt601") || matrix == _T("601") || matrix == _T("1")) {
+                        vpp->colorfix.matrix = VPP_COLORFIX_MATRIX_BT601;
+                    } else if (matrix == _T("bt709") || matrix == _T("709") || matrix == _T("2")) {
+                        vpp->colorfix.matrix = VPP_COLORFIX_MATRIX_BT709;
+                    } else if (matrix == _T("bt2020") || matrix == _T("2020") || matrix == _T("3")) {
+                        vpp->colorfix.matrix = VPP_COLORFIX_MATRIX_BT2020;
+                    } else {
+                        print_cmd_error_invalid_value(tstring(option_name) + _T(" ") + param_arg + _T("="), param_val);
+                        return 1;
+                    }
+                    continue;
+                }
+                if (param_arg == _T("white")) {
+                    if (!parse_color(param_val, vpp->colorfix.whiteR, vpp->colorfix.whiteG, vpp->colorfix.whiteB)) {
+                        print_cmd_error_invalid_value(tstring(option_name) + _T(" ") + param_arg + _T("="), param_val);
+                        return 1;
+                    }
+                    continue;
+                }
+                if (param_arg == _T("black")) {
+                    if (!parse_color(param_val, vpp->colorfix.blackR, vpp->colorfix.blackG, vpp->colorfix.blackB)) {
+                        print_cmd_error_invalid_value(tstring(option_name) + _T(" ") + param_arg + _T("="), param_val);
+                        return 1;
+                    }
+                    continue;
+                }
+                if (param_arg == _T("white_r") || param_arg == _T("white_g") || param_arg == _T("white_b")
+                    || param_arg == _T("black_r") || param_arg == _T("black_g") || param_arg == _T("black_b")
+                    || param_arg == _T("frames")) {
+                    try {
+                        const auto value = std::stoi(param_val);
+                        if (param_arg == _T("white_r")) vpp->colorfix.whiteR = value;
+                        if (param_arg == _T("white_g")) vpp->colorfix.whiteG = value;
+                        if (param_arg == _T("white_b")) vpp->colorfix.whiteB = value;
+                        if (param_arg == _T("black_r")) vpp->colorfix.blackR = value;
+                        if (param_arg == _T("black_g")) vpp->colorfix.blackG = value;
+                        if (param_arg == _T("black_b")) vpp->colorfix.blackB = value;
+                        if (param_arg == _T("frames"))  vpp->colorfix.frames = value;
+                    } catch (...) {
+                        print_cmd_error_invalid_value(tstring(option_name) + _T(" ") + param_arg + _T("="), param_val);
+                        return 1;
+                    }
+                    continue;
+                }
+                if (param_arg == _T("strength")) {
+                    try {
+                        vpp->colorfix.strength = std::stof(param_val);
+                    } catch (...) {
+                        print_cmd_error_invalid_value(tstring(option_name) + _T(" ") + param_arg + _T("="), param_val);
+                        return 1;
+                    }
+                    continue;
+                }
+                if (param_arg == _T("variance_threshold")) {
+                    try {
+                        vpp->colorfix.varianceThreshold = std::stof(param_val);
+                    } catch (...) {
+                        print_cmd_error_invalid_value(tstring(option_name) + _T(" ") + param_arg + _T("="), param_val);
+                        return 1;
+                    }
+                    continue;
+                }
+                print_cmd_error_unknown_opt_param(option_name, param_arg, paramList);
+                return 1;
+            }
+        }
+        return 0;
+    }
     if (IS_OPTION("vpp-edgelevel") && ENABLE_VPP_FILTER_EDGELEVEL) {
         vpp->edgelevel.enable = true;
         if (i+1 >= nArgNum || strInput[i+1][0] == _T('-')) {
@@ -6323,13 +7175,266 @@ int parse_one_vpp_option(const TCHAR *option_name, const TCHAR *strInput[], int 
         }
         return 0;
     }
+    if (IS_OPTION("vpp-dehalo") && ENABLE_VPP_FILTER_DEHALO) {
+        vpp->dehalo.enable = true;
+        if (i + 1 >= nArgNum || strInput[i + 1][0] == _T('-')) {
+            return 0;
+        }
+        i++;
+        const auto paramList = std::vector<std::string>{ "enable", "rx", "ry", "darkstr", "brightstr", "lowsens", "highsens", "ss" };
+        for (const auto& param : split(strInput[i], _T(","))) {
+            auto pos = param.find_first_of(_T("="));
+            if (pos != std::string::npos) {
+                auto param_arg = tolowercase(param.substr(0, pos));
+                auto param_val = param.substr(pos + 1);
+                if (param_arg == _T("enable")) {
+                    bool b = false;
+                    if (!cmd_string_to_bool(&b, param_val)) {
+                        vpp->dehalo.enable = b;
+                    } else {
+                        print_cmd_error_invalid_value(tstring(option_name) + _T(" ") + param_arg + _T("="), param_val);
+                        return 1;
+                    }
+                    continue;
+                }
+                if (param_arg == _T("rx")) {
+                    try {
+                        vpp->dehalo.rx = std::stof(param_val);
+                    } catch (...) {
+                        print_cmd_error_invalid_value(tstring(option_name) + _T(" ") + param_arg + _T("="), param_val);
+                        return 1;
+                    }
+                    continue;
+                }
+                if (param_arg == _T("ry")) {
+                    try {
+                        vpp->dehalo.ry = std::stof(param_val);
+                    } catch (...) {
+                        print_cmd_error_invalid_value(tstring(option_name) + _T(" ") + param_arg + _T("="), param_val);
+                        return 1;
+                    }
+                    continue;
+                }
+                if (param_arg == _T("darkstr")) {
+                    try {
+                        vpp->dehalo.darkstr = std::stof(param_val);
+                    } catch (...) {
+                        print_cmd_error_invalid_value(tstring(option_name) + _T(" ") + param_arg + _T("="), param_val);
+                        return 1;
+                    }
+                    continue;
+                }
+                if (param_arg == _T("brightstr")) {
+                    try {
+                        vpp->dehalo.brightstr = std::stof(param_val);
+                    } catch (...) {
+                        print_cmd_error_invalid_value(tstring(option_name) + _T(" ") + param_arg + _T("="), param_val);
+                        return 1;
+                    }
+                    continue;
+                }
+                if (param_arg == _T("lowsens")) {
+                    try {
+                        vpp->dehalo.lowsens = std::stoi(param_val);
+                    } catch (...) {
+                        print_cmd_error_invalid_value(tstring(option_name) + _T(" ") + param_arg + _T("="), param_val);
+                        return 1;
+                    }
+                    continue;
+                }
+                if (param_arg == _T("highsens")) {
+                    try {
+                        vpp->dehalo.highsens = std::stoi(param_val);
+                    } catch (...) {
+                        print_cmd_error_invalid_value(tstring(option_name) + _T(" ") + param_arg + _T("="), param_val);
+                        return 1;
+                    }
+                    continue;
+                }
+                if (param_arg == _T("ss")) {
+                    try {
+                        vpp->dehalo.ss = std::stof(param_val);
+                    } catch (...) {
+                        print_cmd_error_invalid_value(tstring(option_name) + _T(" ") + param_arg + _T("="), param_val);
+                        return 1;
+                    }
+                    continue;
+                }
+                print_cmd_error_unknown_opt_param(option_name, param_arg, paramList);
+                return 1;
+            }
+        }
+        return 0;
+    }
+    if (IS_OPTION("vpp-finedehalo") && ENABLE_VPP_FILTER_FINEDEHALO) {
+        vpp->finedehalo.enable = true;
+        if (i + 1 >= nArgNum || strInput[i + 1][0] == _T('-')) {
+            return 0;
+        }
+        i++;
+        const auto paramList = std::vector<std::string>{ "enable", "rx", "ry", "darkstr", "brightstr", "lowsens", "highsens", "ss", "thmi", "thma", "thlimi", "thlima", "showmask", "edge" };
+        for (const auto& param : split(strInput[i], _T(","))) {
+            auto pos = param.find_first_of(_T("="));
+            if (pos != std::string::npos) {
+                auto param_arg = tolowercase(param.substr(0, pos));
+                auto param_val = param.substr(pos + 1);
+                if (param_arg == _T("enable")) {
+                    bool b = false;
+                    if (!cmd_string_to_bool(&b, param_val)) {
+                        vpp->finedehalo.enable = b;
+                    } else {
+                        print_cmd_error_invalid_value(tstring(option_name) + _T(" ") + param_arg + _T("="), param_val);
+                        return 1;
+                    }
+                    continue;
+                }
+                if (param_arg == _T("rx")) {
+                    try { vpp->finedehalo.rx = std::stof(param_val); } catch (...) { print_cmd_error_invalid_value(tstring(option_name) + _T(" ") + param_arg + _T("="), param_val); return 1; }
+                    continue;
+                }
+                if (param_arg == _T("ry")) {
+                    try { vpp->finedehalo.ry = std::stof(param_val); } catch (...) { print_cmd_error_invalid_value(tstring(option_name) + _T(" ") + param_arg + _T("="), param_val); return 1; }
+                    continue;
+                }
+                if (param_arg == _T("darkstr")) {
+                    try { vpp->finedehalo.darkstr = std::stof(param_val); } catch (...) { print_cmd_error_invalid_value(tstring(option_name) + _T(" ") + param_arg + _T("="), param_val); return 1; }
+                    continue;
+                }
+                if (param_arg == _T("brightstr")) {
+                    try { vpp->finedehalo.brightstr = std::stof(param_val); } catch (...) { print_cmd_error_invalid_value(tstring(option_name) + _T(" ") + param_arg + _T("="), param_val); return 1; }
+                    continue;
+                }
+                if (param_arg == _T("lowsens")) {
+                    try { vpp->finedehalo.lowsens = std::stoi(param_val); } catch (...) { print_cmd_error_invalid_value(tstring(option_name) + _T(" ") + param_arg + _T("="), param_val); return 1; }
+                    continue;
+                }
+                if (param_arg == _T("highsens")) {
+                    try { vpp->finedehalo.highsens = std::stoi(param_val); } catch (...) { print_cmd_error_invalid_value(tstring(option_name) + _T(" ") + param_arg + _T("="), param_val); return 1; }
+                    continue;
+                }
+                if (param_arg == _T("ss")) {
+                    try { vpp->finedehalo.ss = std::stof(param_val); } catch (...) { print_cmd_error_invalid_value(tstring(option_name) + _T(" ") + param_arg + _T("="), param_val); return 1; }
+                    continue;
+                }
+                if (param_arg == _T("thmi")) {
+                    try { vpp->finedehalo.thmi = std::stoi(param_val); } catch (...) { print_cmd_error_invalid_value(tstring(option_name) + _T(" ") + param_arg + _T("="), param_val); return 1; }
+                    continue;
+                }
+                if (param_arg == _T("thma")) {
+                    try { vpp->finedehalo.thma = std::stoi(param_val); } catch (...) { print_cmd_error_invalid_value(tstring(option_name) + _T(" ") + param_arg + _T("="), param_val); return 1; }
+                    continue;
+                }
+                if (param_arg == _T("thlimi")) {
+                    try { vpp->finedehalo.thlimi = std::stoi(param_val); } catch (...) { print_cmd_error_invalid_value(tstring(option_name) + _T(" ") + param_arg + _T("="), param_val); return 1; }
+                    continue;
+                }
+                if (param_arg == _T("thlima")) {
+                    try { vpp->finedehalo.thlima = std::stoi(param_val); } catch (...) { print_cmd_error_invalid_value(tstring(option_name) + _T(" ") + param_arg + _T("="), param_val); return 1; }
+                    continue;
+                }
+                if (param_arg == _T("showmask")) {
+                    try { vpp->finedehalo.showmask = std::stoi(param_val); } catch (...) { print_cmd_error_invalid_value(tstring(option_name) + _T(" ") + param_arg + _T("="), param_val); return 1; }
+                    continue;
+                }
+                if (param_arg == _T("edge")) {
+                    const auto edge = tolowercase(param_val);
+                    if (edge == _T("prewitt") || edge == _T("sobel") || edge == _T("scharr") || edge == _T("kirsch") || edge == _T("laplacian")) {
+                        vpp->finedehalo.edge = edge;
+                    } else {
+                        print_cmd_error_invalid_value(tstring(option_name) + _T(" ") + param_arg + _T("="), param_val);
+                        return 1;
+                    }
+                    continue;
+                }
+                print_cmd_error_unknown_opt_param(option_name, param_arg, paramList);
+                return 1;
+            } else {
+                print_cmd_error_unknown_opt_param(option_name, param, paramList);
+                return 1;
+            }
+        }
+        return 0;
+    }
+    if (IS_OPTION("vpp-hqdering") && ENABLE_VPP_FILTER_HQDERING) {
+        vpp->dering.enable = true;
+        if (i + 1 >= nArgNum || strInput[i + 1][0] == _T('-')) {
+            return 0;
+        }
+        i++;
+        const auto paramList = std::vector<std::string>{ "enable", "mrad", "mthr", "sigma", "showmask", "protect", "edge" };
+        for (const auto& param : split(strInput[i], _T(","))) {
+            auto pos = param.find_first_of(_T("="));
+            if (pos != std::string::npos) {
+                auto param_arg = tolowercase(param.substr(0, pos));
+                auto param_val = param.substr(pos + 1);
+                if (param_arg == _T("enable")) {
+                    bool b = false;
+                    if (!cmd_string_to_bool(&b, param_val)) {
+                        vpp->dering.enable = b;
+                    } else {
+                        print_cmd_error_invalid_value(tstring(option_name) + _T(" ") + param_arg + _T("="), param_val);
+                        return 1;
+                    }
+                    continue;
+                }
+                if (param_arg == _T("mrad")) {
+                    try { vpp->dering.mrad = std::stoi(param_val); } catch (...) { print_cmd_error_invalid_value(tstring(option_name) + _T(" ") + param_arg + _T("="), param_val); return 1; }
+                    continue;
+                }
+                if (param_arg == _T("mthr")) {
+                    try { vpp->dering.mthr = std::stoi(param_val); } catch (...) { print_cmd_error_invalid_value(tstring(option_name) + _T(" ") + param_arg + _T("="), param_val); return 1; }
+                    continue;
+                }
+                if (param_arg == _T("sigma")) {
+                    try { vpp->dering.sigma = std::stof(param_val); } catch (...) { print_cmd_error_invalid_value(tstring(option_name) + _T(" ") + param_arg + _T("="), param_val); return 1; }
+                    continue;
+                }
+                if (param_arg == _T("showmask")) {
+                    bool b = false;
+                    if (!cmd_string_to_bool(&b, param_val)) {
+                        vpp->dering.showmask = b;
+                    } else {
+                        print_cmd_error_invalid_value(tstring(option_name) + _T(" ") + param_arg + _T("="), param_val);
+                        return 1;
+                    }
+                    continue;
+                }
+                if (param_arg == _T("protect")) {
+                    bool b = false;
+                    if (!cmd_string_to_bool(&b, param_val)) {
+                        vpp->dering.protect = b;
+                    } else {
+                        print_cmd_error_invalid_value(tstring(option_name) + _T(" ") + param_arg + _T("="), param_val);
+                        return 1;
+                    }
+                    continue;
+                }
+                if (param_arg == _T("edge")) {
+                    const auto edge = tolowercase(param_val);
+                    if (edge == _T("log") || edge == _T("sobel") || edge == _T("prewitt") || edge == _T("scharr") || edge == _T("kirsch") || edge == _T("laplacian")) {
+                        vpp->dering.edge = edge;
+                    } else {
+                        print_cmd_error_invalid_value(tstring(option_name) + _T(" ") + param_arg + _T("="), param_val);
+                        return 1;
+                    }
+                    continue;
+                }
+                print_cmd_error_unknown_opt_param(option_name, param_arg, paramList);
+                return 1;
+            } else {
+                print_cmd_error_unknown_opt_param(option_name, param, paramList);
+                return 1;
+            }
+        }
+        return 0;
+    }
     if (IS_OPTION("vpp-msharpen") && ENABLE_VPP_FILTER_MSHARPEN) {
         vpp->msharpen.enable = true;
         if (i+1 >= nArgNum || strInput[i+1][0] == _T('-')) {
             return 0;
         }
         i++;
-        const auto paramList = std::vector<std::string>{ "strength", "threshold", "highq", "mask" };
+        const auto paramList = std::vector<std::string>{ "strength", "threshold", "slope", "luma_limit", "block_protect", "highq", "mask" };
         for (const auto& param : split(strInput[i], _T(","))) {
             auto pos = param.find_first_of(_T("="));
             if (pos != std::string::npos) {
@@ -6364,6 +7469,33 @@ int parse_one_vpp_option(const TCHAR *option_name, const TCHAR *strInput[], int 
                     }
                     continue;
                 }
+                if (param_arg == _T("slope")) {
+                    try {
+                        vpp->msharpen.slope = std::stof(param_val);
+                    } catch (...) {
+                        print_cmd_error_invalid_value(tstring(option_name) + _T(" ") + param_arg + _T("="), param_val);
+                        return 1;
+                    }
+                    continue;
+                }
+                if (param_arg == _T("luma_limit")) {
+                    try {
+                        vpp->msharpen.luma_limit = std::stof(param_val);
+                    } catch (...) {
+                        print_cmd_error_invalid_value(tstring(option_name) + _T(" ") + param_arg + _T("="), param_val);
+                        return 1;
+                    }
+                    continue;
+                }
+                if (param_arg == _T("block_protect")) {
+                    try {
+                        vpp->msharpen.block_protect = std::stof(param_val);
+                    } catch (...) {
+                        print_cmd_error_invalid_value(tstring(option_name) + _T(" ") + param_arg + _T("="), param_val);
+                        return 1;
+                    }
+                    continue;
+                }
                 if (param_arg == _T("highq")) {
                     bool b = false;
                     if (!cmd_string_to_bool(&b, param_val)) {
@@ -6390,13 +7522,63 @@ int parse_one_vpp_option(const TCHAR *option_name, const TCHAR *strInput[], int 
         }
         return 0;
     }
+    if (IS_OPTION("vpp-cas") && ENABLE_VPP_FILTER_CAS) {
+        vpp->cas.enable = true;
+        if (i + 1 >= nArgNum || strInput[i + 1][0] == _T('-')) {
+            return 0;
+        }
+        i++;
+        const auto paramList = std::vector<std::string>{ "enable", "sharpness", "hdr" };
+        for (const auto& param : split(strInput[i], _T(","))) {
+            auto pos = param.find_first_of(_T("="));
+            if (pos != std::string::npos) {
+                auto param_arg = tolowercase(param.substr(0, pos));
+                auto param_val = param.substr(pos + 1);
+                if (param_arg == _T("enable")) {
+                    bool b = false;
+                    if (!cmd_string_to_bool(&b, param_val)) {
+                        vpp->cas.enable = b;
+                    } else {
+                        print_cmd_error_invalid_value(tstring(option_name) + _T(" ") + param_arg + _T("="), param_val);
+                        return 1;
+                    }
+                    continue;
+                }
+                if (param_arg == _T("sharpness")) {
+                    try {
+                        vpp->cas.sharpness = std::stof(param_val);
+                    } catch (...) {
+                        print_cmd_error_invalid_value(tstring(option_name) + _T(" ") + param_arg + _T("="), param_val);
+                        return 1;
+                    }
+                    continue;
+                }
+                if (param_arg == _T("hdr")) {
+                    bool b = false;
+                    if (!cmd_string_to_bool(&b, param_val)) {
+                        vpp->cas.hdr = b;
+                    } else {
+                        print_cmd_error_invalid_value(tstring(option_name) + _T(" ") + param_arg + _T("="), param_val);
+                        return 1;
+                    }
+                    continue;
+                }
+                print_cmd_error_unknown_opt_param(option_name, param_arg, paramList);
+                return 1;
+            } else {
+                print_cmd_error_unknown_opt_param(option_name, param, paramList);
+                return 1;
+            }
+        }
+        return 0;
+    }
     if (IS_OPTION("vpp-warpsharp") && ENABLE_VPP_FILTER_WARPSHARP) {
         vpp->warpsharp.enable = true;
         if (i + 1 >= nArgNum || strInput[i + 1][0] == _T('-')) {
             return 0;
         }
         i++;
-        const auto paramList = std::vector<std::string>{ "threshold", "blur", "type", "depth", "chroma" };
+        const auto paramList = std::vector<std::string>{ "threshold", "blur", "type", "depth", "chroma", "depth_min", "depth_max", "edge_thr", "gamma" };
         for (const auto& param : split(strInput[i], _T(","))) {
             auto pos = param.find_first_of(_T("="));
             if (pos != std::string::npos) {
@@ -6452,6 +7634,42 @@ int parse_one_vpp_option(const TCHAR *option_name, const TCHAR *strInput[], int 
                 if (param_arg == _T("chroma")) {
                     try {
                         vpp->warpsharp.chroma = std::stoi(param_val);
+                    } catch (...) {
+                        print_cmd_error_invalid_value(tstring(option_name) + _T(" ") + param_arg + _T("="), param_val);
+                        return 1;
+                    }
+                    continue;
+                }
+                if (param_arg == _T("depth_min")) {
+                    try {
+                        vpp->warpsharp.depth_min = std::stof(param_val);
+                    } catch (...) {
+                        print_cmd_error_invalid_value(tstring(option_name) + _T(" ") + param_arg + _T("="), param_val);
+                        return 1;
+                    }
+                    continue;
+                }
+                if (param_arg == _T("depth_max")) {
+                    try {
+                        vpp->warpsharp.depth_max = std::stof(param_val);
+                    } catch (...) {
+                        print_cmd_error_invalid_value(tstring(option_name) + _T(" ") + param_arg + _T("="), param_val);
+                        return 1;
+                    }
+                    continue;
+                }
+                if (param_arg == _T("edge_thr")) {
+                    try {
+                        vpp->warpsharp.edge_thr = std::stof(param_val);
+                    } catch (...) {
+                        print_cmd_error_invalid_value(tstring(option_name) + _T(" ") + param_arg + _T("="), param_val);
+                        return 1;
+                    }
+                    continue;
+                }
+                if (param_arg == _T("gamma")) {
+                    try {
+                        vpp->warpsharp.gamma = std::stof(param_val);
                     } catch (...) {
                         print_cmd_error_invalid_value(tstring(option_name) + _T(" ") + param_arg + _T("="), param_val);
                         return 1;
@@ -10532,6 +11750,10 @@ tstring gen_cmd(const RGYParamVpp *param, const RGYParamVpp *defaultPrm, bool sa
             }
         } else {
             OPT_LST(_T("--vpp-resize"), resize_algo, list_vpp_resize);
+            if (param->resize_algo == RGY_VPP_RESIZE_FSR1
+                && param->resize_fsr1.sharpness != defaultPrm->resize_fsr1.sharpness) {
+                cmd << _T(",sharpness=") << std::setprecision(3) << param->resize_fsr1.sharpness;
+            }
         }
     }
 #if ENCODER_QSV
@@ -10942,6 +12164,27 @@ tstring gen_cmd(const RGYParamVpp *param, const RGYParamVpp *defaultPrm, bool sa
             cmd << _T(" --vpp-bwdif");
         }
     }
+    if (param->maa != defaultPrm->maa) {
+        tmp.str(tstring());
+        if (!param->maa.enable && save_disabled_prm) {
+            tmp << _T(",enable=false");
+        }
+        if (param->maa.enable || save_disabled_prm) {
+            ADD_FLOAT(_T("ss"), maa.ss, 2);
+            ADD_NUM(_T("aa"), maa.aa);
+            ADD_NUM(_T("aac"), maa.aac);
+            ADD_BOOL(_T("mask"), maa.mask);
+            ADD_NUM(_T("mthresh"), maa.mthresh);
+            ADD_BOOL(_T("chroma"), maa.chroma);
+            ADD_NUM(_T("show"), maa.show);
+            tmp << _T(",edge=") << param->maa.edge;
+        }
+        if (!tmp.str().empty()) {
+            cmd << _T(" --vpp-maa ") << tmp.str().substr(1);
+        } else if (param->maa.enable) {
+            cmd << _T(" --vpp-maa");
+        }
+    }
     if (param->decomb != defaultPrm->decomb) {
         tmp.str(tstring());
         if (!param->decomb.enable && save_disabled_prm) {
@@ -11129,6 +12372,8 @@ tstring gen_cmd(const RGYParamVpp *param, const RGYParamVpp *defaultPrm, bool sa
             ADD_NUM(_T("patch"), nlmeans.patchSize);
             ADD_NUM(_T("search"), nlmeans.searchSize);
             ADD_FLOAT(_T("h"), nlmeans.h, 3);
+            ADD_NUM(_T("d"), nlmeans.d);
+            ADD_NUM(_T("search_t"), nlmeans.searchSizeT);
             ADD_LST(_T("fp16"), nlmeans.fp16, list_vpp_nlmeans_fp16);
             ADD_BOOL(_T("shared_mem"), nlmeans.sharedMem);
         }
@@ -11153,6 +12398,50 @@ tstring gen_cmd(const RGYParamVpp *param, const RGYParamVpp *defaultPrm, bool sa
             cmd << _T(" --vpp-pmd ") << tmp.str().substr(1);
         } else if (param->pmd.enable) {
             cmd << _T(" --vpp-pmd");
+        }
+    }
+    if (param->hqdn3d != defaultPrm->hqdn3d) {
+        tmp.str(tstring());
+        if (!param->hqdn3d.enable && save_disabled_prm) {
+            tmp << _T(",enable=false");
+        }
+        if (param->hqdn3d.enable || save_disabled_prm) {
+            ADD_FLOAT(_T("luma_spatial"), hqdn3d.luma_spatial, 3);
+            ADD_FLOAT(_T("chroma_spatial"), hqdn3d.chroma_spatial, 3);
+            ADD_FLOAT(_T("luma_temporal"), hqdn3d.luma_temporal, 3);
+            ADD_FLOAT(_T("chroma_temporal"), hqdn3d.chroma_temporal, 3);
+        }
+        if (!tmp.str().empty()) {
+            cmd << _T(" --vpp-hqdn3d ") << tmp.str().substr(1);
+        } else if (param->hqdn3d.enable) {
+            cmd << _T(" --vpp-hqdn3d");
+        }
+    }
+    if (param->descale != defaultPrm->descale) {
+        tmp.str(tstring());
+        if (!param->descale.enable && save_disabled_prm) {
+            tmp << _T(",enable=false");
+        }
+        if (param->descale.enable || save_disabled_prm) {
+            ADD_LST(_T("kernel"), descale.kernel, list_vpp_descale_kernel);
+            ADD_NUM(_T("width"), descale.width);
+            ADD_NUM(_T("height"), descale.height);
+            ADD_FLOAT(_T("b"), descale.b, 3);
+            ADD_FLOAT(_T("c"), descale.c, 3);
+            ADD_FLOAT(_T("src_left"), descale.src_left, 3);
+            ADD_FLOAT(_T("src_top"), descale.src_top, 3);
+            ADD_LST(_T("border_handling"), descale.border, list_vpp_descale_border);
+            ADD_BOOL(_T("auto"), descale.autoDetect);
+            ADD_NUM(_T("search_min"), descale.search_min);
+            ADD_NUM(_T("search_max"), descale.search_max);
+            ADD_NUM(_T("search_step"), descale.search_step);
+            ADD_NUM(_T("detect_frames"), descale.detect_frames);
+            ADD_BOOL(_T("show_scores"), descale.show_scores);
+        }
+        if (!tmp.str().empty()) {
+            cmd << _T(" --vpp-descale ") << tmp.str().substr(1);
+        } else if (param->descale.enable) {
+            cmd << _T(" --vpp-descale");
         }
     }
     if (param->dct != defaultPrm->dct) {
@@ -11338,6 +12627,7 @@ tstring gen_cmd(const RGYParamVpp *param, const RGYParamVpp *defaultPrm, bool sa
         if (param->msmooth.enable || save_disabled_prm) {
             ADD_NUM(_T("strength"), msmooth.strength);
             ADD_FLOAT(_T("threshold"), msmooth.threshold, 3);
+            ADD_FLOAT(_T("threshold_c"), msmooth.threshold_c, 3);
             ADD_BOOL(_T("highq"), msmooth.highq);
             ADD_BOOL(_T("mask"), msmooth.mask);
         }
@@ -11432,6 +12722,128 @@ tstring gen_cmd(const RGYParamVpp *param, const RGYParamVpp *defaultPrm, bool sa
             cmd << _T(" --vpp-unsharp");
         }
     }
+    if (param->vinverse != defaultPrm->vinverse) {
+        tmp.str(tstring());
+        if (!param->vinverse.enable && save_disabled_prm) {
+            tmp << _T(",enable=false");
+        }
+        if (param->vinverse.enable || save_disabled_prm) {
+            ADD_LST(_T("mode"), vinverse.mode, list_vpp_vinverse_mode);
+            ADD_FLOAT(_T("sstr"), vinverse.sstr, 3);
+            ADD_FLOAT(_T("amnt"), vinverse.amnt, 3);
+            ADD_FLOAT(_T("scl"), vinverse.scl, 3);
+            ADD_FLOAT(_T("thr"), vinverse.thr, 3);
+            ADD_BOOL(_T("chroma"), vinverse.chroma);
+        }
+        if (!tmp.str().empty()) {
+            cmd << _T(" --vpp-vinverse ") << tmp.str().substr(1);
+        } else if (param->vinverse.enable) {
+            cmd << _T(" --vpp-vinverse");
+        }
+    }
+    if (param->chromashift != defaultPrm->chromashift) {
+        tmp.str(tstring());
+        if (!param->chromashift.enable && save_disabled_prm) {
+            tmp << _T(",enable=false");
+        }
+        if (param->chromashift.enable || save_disabled_prm) {
+            ADD_FLOAT(_T("x"), chromashift.x, 3);
+            ADD_FLOAT(_T("y"), chromashift.y, 3);
+            ADD_NUM(_T("show"), chromashift.show);
+            ADD_BOOL(_T("auto"), chromashift.auto_detect);
+            ADD_NUM(_T("auto_frames"), chromashift.auto_frames);
+            ADD_NUM(_T("auto_min_pairs"), chromashift.auto_min_pairs);
+        }
+        if (!tmp.str().empty()) {
+            cmd << _T(" --vpp-chromashift ") << tmp.str().substr(1);
+        } else if (param->chromashift.enable) {
+            cmd << _T(" --vpp-chromashift");
+        }
+    }
+    if (param->deblock != defaultPrm->deblock) {
+        tmp.str(tstring());
+        if (!param->deblock.enable && save_disabled_prm) {
+            tmp << _T(",enable=false");
+        }
+        if (param->deblock.enable || save_disabled_prm) {
+            ADD_NUM(_T("qp"), deblock.qp);
+            ADD_NUM(_T("alpha"), deblock.alpha);
+            ADD_NUM(_T("beta"), deblock.beta);
+            ADD_BOOL(_T("chroma"), deblock.chroma);
+        }
+        if (!tmp.str().empty()) {
+            cmd << _T(" --vpp-deblock ") << tmp.str().substr(1);
+        } else if (param->deblock.enable) {
+            cmd << _T(" --vpp-deblock");
+        }
+    }
+    if (param->deflicker != defaultPrm->deflicker) {
+        tmp.str(tstring());
+        if (!param->deflicker.enable && save_disabled_prm) {
+            tmp << _T(",enable=false");
+        }
+        if (param->deflicker.enable || save_disabled_prm) {
+            ADD_FLOAT(_T("strength"), deflicker.strength, 3);
+            ADD_FLOAT(_T("damping"), deflicker.damping, 3);
+            ADD_FLOAT(_T("scene_threshold"), deflicker.scene_threshold, 3);
+            ADD_NUM(_T("frames"), deflicker.frames);
+            ADD_BOOL(_T("predictor"), deflicker.predictor);
+            ADD_BOOL(_T("chroma"), deflicker.chroma);
+        }
+        if (!tmp.str().empty()) {
+            cmd << _T(" --vpp-deflicker ") << tmp.str().substr(1);
+        } else if (param->deflicker.enable) {
+            cmd << _T(" --vpp-deflicker");
+        }
+    }
+    if (param->stab != defaultPrm->stab) {
+        tmp.str(tstring());
+        if (!param->stab.enable && save_disabled_prm) {
+            tmp << _T(",enable=false");
+        }
+        if (param->stab.enable || save_disabled_prm) {
+            ADD_FLOAT(_T("strength"), stab.strength, 3);
+            ADD_FLOAT(_T("damping"), stab.damping, 3);
+            ADD_FLOAT(_T("trust"), stab.trust_threshold, 3);
+            ADD_FLOAT(_T("max_shift"), stab.max_shift, 1);
+            const auto borderStr = (param->stab.border == VPP_STAB_BORDER_CLAMP) ? _T("clamp")
+                : (param->stab.border == VPP_STAB_BORDER_MIRROR) ? _T("mirror") : _T("black");
+            tmp << _T(",border=") << borderStr;
+        }
+        if (!tmp.str().empty()) {
+            cmd << _T(" --vpp-stab ") << tmp.str().substr(1);
+        } else if (param->stab.enable) {
+            cmd << _T(" --vpp-stab");
+        }
+    }
+    if (param->colorfix != defaultPrm->colorfix) {
+        tmp.str(tstring());
+        if (!param->colorfix.enable && save_disabled_prm) {
+            tmp << _T(",enable=false");
+        }
+        if (param->colorfix.enable || save_disabled_prm) {
+            const auto modeStr = (param->colorfix.mode == VPP_COLORFIX_MODE_AUTO) ? _T("auto")
+                : (param->colorfix.mode == VPP_COLORFIX_MODE_GRAY) ? _T("gray") : _T("manual");
+            const auto spaceStr = (param->colorfix.space == VPP_COLORFIX_SPACE_RGB) ? _T("rgb")
+                : (param->colorfix.space == VPP_COLORFIX_SPACE_YUV) ? _T("yuv") : _T("auto");
+            const auto matrixStr = (param->colorfix.matrix == VPP_COLORFIX_MATRIX_BT601) ? _T("bt601")
+                : (param->colorfix.matrix == VPP_COLORFIX_MATRIX_BT709) ? _T("bt709")
+                : (param->colorfix.matrix == VPP_COLORFIX_MATRIX_BT2020) ? _T("bt2020") : _T("auto");
+            tmp << _T(",mode=") << modeStr;
+            tmp << _T(",space=") << spaceStr;
+            tmp << _T(",matrix=") << matrixStr;
+            tmp << strsprintf(_T(",white=%02x%02x%02x"), param->colorfix.whiteR, param->colorfix.whiteG, param->colorfix.whiteB);
+            tmp << strsprintf(_T(",black=%02x%02x%02x"), param->colorfix.blackR, param->colorfix.blackG, param->colorfix.blackB);
+            ADD_NUM(_T("frames"), colorfix.frames);
+            ADD_FLOAT(_T("strength"), colorfix.strength, 3);
+            ADD_FLOAT(_T("variance_threshold"), colorfix.varianceThreshold, 3);
+        }
+        if (!tmp.str().empty()) {
+            cmd << _T(" --vpp-colorfix ") << tmp.str().substr(1);
+        } else if (param->colorfix.enable) {
+            cmd << _T(" --vpp-colorfix");
+        }
+    }
     if (param->edgelevel != defaultPrm->edgelevel) {
         tmp.str(tstring());
         if (!param->edgelevel.enable && save_disabled_prm) {
@@ -11449,6 +12861,75 @@ tstring gen_cmd(const RGYParamVpp *param, const RGYParamVpp *defaultPrm, bool sa
             cmd << _T(" --vpp-edgelevel");
         }
     }
+    if (param->dehalo != defaultPrm->dehalo) {
+        tmp.str(tstring());
+        if (!param->dehalo.enable && save_disabled_prm) {
+            tmp << _T(",enable=false");
+        }
+        if (param->dehalo.enable || save_disabled_prm) {
+            ADD_FLOAT(_T("rx"), dehalo.rx, 3);
+            ADD_FLOAT(_T("ry"), dehalo.ry, 3);
+            ADD_FLOAT(_T("darkstr"), dehalo.darkstr, 3);
+            ADD_FLOAT(_T("brightstr"), dehalo.brightstr, 3);
+            ADD_NUM(_T("lowsens"), dehalo.lowsens);
+            ADD_NUM(_T("highsens"), dehalo.highsens);
+            ADD_FLOAT(_T("ss"), dehalo.ss, 3);
+        }
+        if (!tmp.str().empty()) {
+            cmd << _T(" --vpp-dehalo ") << tmp.str().substr(1);
+        } else if (param->dehalo.enable) {
+            cmd << _T(" --vpp-dehalo");
+        }
+    }
+    if (param->finedehalo != defaultPrm->finedehalo) {
+        tmp.str(tstring());
+        if (!param->finedehalo.enable && save_disabled_prm) {
+            tmp << _T(",enable=false");
+        }
+        if (param->finedehalo.enable || save_disabled_prm) {
+            ADD_FLOAT(_T("rx"), finedehalo.rx, 3);
+            ADD_FLOAT(_T("ry"), finedehalo.ry, 3);
+            ADD_FLOAT(_T("darkstr"), finedehalo.darkstr, 3);
+            ADD_FLOAT(_T("brightstr"), finedehalo.brightstr, 3);
+            ADD_NUM(_T("lowsens"), finedehalo.lowsens);
+            ADD_NUM(_T("highsens"), finedehalo.highsens);
+            ADD_FLOAT(_T("ss"), finedehalo.ss, 3);
+            ADD_NUM(_T("thmi"), finedehalo.thmi);
+            ADD_NUM(_T("thma"), finedehalo.thma);
+            ADD_NUM(_T("thlimi"), finedehalo.thlimi);
+            ADD_NUM(_T("thlima"), finedehalo.thlima);
+            ADD_NUM(_T("showmask"), finedehalo.showmask);
+            if (param->finedehalo.edge != defaultPrm->finedehalo.edge) {
+                tmp << _T(",edge=") << param->finedehalo.edge.c_str();
+            }
+        }
+        if (!tmp.str().empty()) {
+            cmd << _T(" --vpp-finedehalo ") << tmp.str().substr(1);
+        } else if (param->finedehalo.enable) {
+            cmd << _T(" --vpp-finedehalo");
+        }
+    }
+    if (param->dering != defaultPrm->dering) {
+        tmp.str(tstring());
+        if (!param->dering.enable && save_disabled_prm) {
+            tmp << _T(",enable=false");
+        }
+        if (param->dering.enable || save_disabled_prm) {
+            ADD_NUM(_T("mrad"), dering.mrad);
+            ADD_NUM(_T("mthr"), dering.mthr);
+            ADD_FLOAT(_T("sigma"), dering.sigma, 3);
+            ADD_BOOL(_T("showmask"), dering.showmask);
+            ADD_BOOL(_T("protect"), dering.protect);
+            if (param->dering.edge != defaultPrm->dering.edge) {
+                tmp << _T(",edge=") << param->dering.edge.c_str();
+            }
+        }
+        if (!tmp.str().empty()) {
+            cmd << _T(" --vpp-hqdering ") << tmp.str().substr(1);
+        } else if (param->dering.enable) {
+            cmd << _T(" --vpp-hqdering");
+        }
+    }
     if (param->msharpen != defaultPrm->msharpen) {
         tmp.str(tstring());
         if (!param->msharpen.enable && save_disabled_prm) {
@@ -11457,6 +12938,9 @@ tstring gen_cmd(const RGYParamVpp *param, const RGYParamVpp *defaultPrm, bool sa
         if (param->msharpen.enable || save_disabled_prm) {
             ADD_FLOAT(_T("strength"), msharpen.strength, 3);
             ADD_FLOAT(_T("threshold"), msharpen.threshold, 3);
+            ADD_FLOAT(_T("slope"), msharpen.slope, 3);
+            ADD_FLOAT(_T("luma_limit"), msharpen.luma_limit, 3);
+            ADD_FLOAT(_T("block_protect"), msharpen.block_protect, 3);
             ADD_BOOL(_T("highq"), msharpen.highq);
             ADD_BOOL(_T("mask"), msharpen.mask);
         }
@@ -11464,6 +12948,21 @@ tstring gen_cmd(const RGYParamVpp *param, const RGYParamVpp *defaultPrm, bool sa
             cmd << _T(" --vpp-msharpen ") << tmp.str().substr(1);
         } else if (param->msharpen.enable) {
             cmd << _T(" --vpp-msharpen");
+        }
+    }
+    if (param->cas != defaultPrm->cas) {
+        tmp.str(tstring());
+        if (!param->cas.enable && save_disabled_prm) {
+            tmp << _T(",enable=false");
+        }
+        if (param->cas.enable || save_disabled_prm) {
+            ADD_FLOAT(_T("sharpness"), cas.sharpness, 3);
+            ADD_BOOL(_T("hdr"), cas.hdr);
+        }
+        if (!tmp.str().empty()) {
+            cmd << _T(" --vpp-cas ") << tmp.str().substr(1);
+        } else if (param->cas.enable) {
+            cmd << _T(" --vpp-cas");
         }
     }
     if (param->warpsharp != defaultPrm->warpsharp) {
@@ -11477,6 +12976,10 @@ tstring gen_cmd(const RGYParamVpp *param, const RGYParamVpp *defaultPrm, bool sa
             ADD_NUM(_T("type"), warpsharp.type);
             ADD_FLOAT(_T("depth"), warpsharp.depth, 3);
             ADD_NUM(_T("chroma"), warpsharp.chroma);
+            ADD_FLOAT(_T("depth_min"), warpsharp.depth_min, 3);
+            ADD_FLOAT(_T("depth_max"), warpsharp.depth_max, 3);
+            ADD_FLOAT(_T("edge_thr"), warpsharp.edge_thr, 3);
+            ADD_FLOAT(_T("gamma"), warpsharp.gamma, 3);
         }
         if (!tmp.str().empty()) {
             cmd << _T(" --vpp-warpsharp ") << tmp.str().substr(1);
@@ -13106,64 +14609,33 @@ tstring gen_cmd_help_vpp() {
         _T("   --vpp-ivtc [<param1>=<value>][,<param2>=<value>][...]\n")
         _T("     inverse telecine (Telecide + Decimate style).\n")
         _T("    params\n")
-        _T("      guide=<int>           matching mode.\n")
-        _T("                              0 = min-combing\n")
-        _T("                              1 = 2-way + combed-override (prefers C unless combed)\n")
-        _T("                              2 = PAL 2:2 (cycle 2, alternates C/N)\n")
-        _T("      post=<int>            post-process for residual combing.\n")
-        _T("                              0 = off\n")
-        _T("                              2 = adaptive per-pixel vertical blend\n")
-        _T("      cycle=<auto|int>      decimation cycle length.\n")
-        _T("                              auto (default) = enable 3:2 decimation only if input fps >= 26\n")
-        _T("                              0 = decimation disabled\n")
-        _T("                              2 = PAL 2:2, 5 = NTSC 3:2 (30 -> 24fps), 2..16 = custom\n")
-        _T("      drop=<int>            frames to drop per cycle. default 1 (only value supported)\n")
-        _T("      mixed=<bool>          RFF/progressive + interlaced mixed mode. RFF sections\n")
-        _T("                              are direct-emitted without decimation; repeat-field\n")
-        _T("                              reconstruction is used only when it reduces combing.\n")
-        _T("                              Interlaced sections use field match/post + cycle=5/drop=1.\n")
-        _T("                              Requires --avsw/--avhw; cannot be used with expand=on\n")
-        _T("                              or user cycle.\n")
-        _T("      combthresh=<float>    per-pixel combing threshold (normalized 0.0-1.0, default 0.12)\n")
-        _T("      cleanfrac=<float>     frame-level clean-frame threshold, fraction of pixels allowed\n")
-        _T("                              to be combed while still preferring C (default 0.20 = 20%%)\n")
-        _T("      dthresh=<int>         per-pixel deinterlace gate (0..255, default 7). Only missing-\n")
-        _T("                              field pixels with |cur - interp(cur)| > dthresh get replaced\n")
-        _T("                              by the BWDIF/SP reconstruction; clean pixels pass through.\n")
-        _T("                              0 disables the gate (legacy whole-row replacement).\n")
-        _T("      chroma=<bool>         include U+V planes in match-quality scoring (default off).\n")
-        _T("                              Helps on content where chroma dominates motion (animation,\n")
-        _T("                              chroma-rich fades). Adds ~50%% scoring-kernel cost.\n")
-        _T("      back=<int>            when to test match=P (borrow bot from previous frame).\n")
-        _T("                              0 = always test P\n")
-        _T("                              1 = only test P when C looks combed (default)\n")
-        _T("      y0=<int> y1=<int>     exclusion band: ignore rows outside [y0, y1] for combing metric.\n")
-        _T("                              useful for burned-in subtitles. y0=y1=0 disables (default).\n")
-        _T("      cadlock=auto|on|off   5-frame cadence pattern lock + match override.\n")
-        _T("                              auto (default) enables when guide>=1 (NTSC 3:2 or\n")
-        _T("                              PAL 2:2). on = always enable. off = disable entirely.\n")
-        _T("      gthresh=<int>         tolerance percent for cadence-predicted match override\n")
-        _T("                              (0..100, default 10). Predicted match is adopted only\n")
-        _T("                              when its score differs from argmin by less than gthresh%%.\n")
-        _T("                              0 disables override (cadence becomes diagnostic-only).\n")
-        _T("      vthresh=<int>         post-assembly combing veto threshold (0..256, default 50).\n")
-        _T("                              Layered on top of the picstruct-class applyBlend gate:\n")
-        _T("                              when the gate would fire, blend is vetoed if the chosen\n")
-        _T("                              match's assembled-field-pair cComb is below vthresh.\n")
-        _T("                              Can only REMOVE blends, never add them. 0 disables the\n")
-        _T("                              veto (pure classifier-gate behaviour).\n")
-        _T("      expand=auto|on|off    DGDecode-style RFF expansion. When enabled, 4 coded\n")
-        _T("                              soft-telecine frames become 5 internal ring entries\n")
-        _T("                              (+1 synth frame per RFF-flagged input). Cycle=5\n")
-        _T("                              drop=1 decimation is forced internally; output rate\n")
-        _T("                              stays at the input rate (23.976 fps). Catches\n")
-        _T("                              sw-decoder-weaved combing via TFM-equivalent field\n")
-        _T("                              matching. auto (default) enables when guide>=1 and\n")
-        _T("                              upstream detected pulldown; on = force; off = disable.\n")
-        _T("      hysteresis=<float>    penalty against flipping the chosen match type\n")
-        _T("                              between adjacent frames. 0.0..1.0, default 0.0\n")
+        _T("      guide=<int>           matching mode. (default=%d, 0 - 2)\n")
+        _T("      post=<int>            post-process for residual combing. (default=%d, 0 or 2)\n")
+        _T("      cycle=<auto|int>      decimation cycle length. auto, 0, or 2 - 16\n")
+        _T("      drop=<int>            frames to drop per cycle. (default=%d, only 1 supported)\n")
+        _T("      combthresh=<float>    per-pixel combing threshold. (default=%.2f, 0.0 - 1.0)\n")
+        _T("      cleanfrac=<float>     block-level clean threshold for guide=1 / post=2.\n")
+        _T("                              fraction of pixels in a block allowed to be combed\n")
+        _T("                              before the block is considered dirty. (default=%.2f)\n")
+        _T("      dthresh=<int>         per-pixel deinterlace gate. (default=%d, 0 - 255)\n")
+        _T("      chroma=<bool>         include chroma planes in match-quality scoring. (default=off)\n")
+        _T("      back=<int>            when to test match=P. (default=%d, 0 - 1)\n")
+        _T("      y0=<int>,y1=<int>     ignore rows outside [y0, y1] for combing metric.\n")
+        _T("      cadlock=<auto|on|off> cadence pattern lock + match override. (default=auto)\n")
+        _T("      gthresh=<int>         tolerance percent for cadence override. (default=%d, 0 - 100)\n")
+        _T("      vthresh=<int>         post-assembly combing veto threshold. (default=%d, 0 - 256)\n")
+        _T("      expand=<auto|on|off>  RFF expansion. auto enables for detected pulldown.\n")
+        _T("      mixed=<bool>          mixed RFF/progressive + interlaced mode. (default=off)\n")
+        _T("      hysteresis=<float>    match hysteresis. (default=%.2f, 0.0 - 1.0)\n")
         _T("      tff=<auto|on|off>     top-field-first. default auto (derived from input picstruct)\n")
-        _T("      log=<path|bool>       write per-frame match log to <path>\n"));
+        _T("      log=<path|bool>       write per-frame match log to <path>.\n")
+        _T("                              log=true uses output filename base + .ivtc.log.txt\n"),
+        FILTER_DEFAULT_IVTC_GUIDE, FILTER_DEFAULT_IVTC_POST,
+        FILTER_DEFAULT_IVTC_DROP,
+        FILTER_DEFAULT_IVTC_COMB_THRESH, FILTER_DEFAULT_IVTC_CLEAN_FRAC,
+        FILTER_DEFAULT_IVTC_DTHRESH, FILTER_DEFAULT_IVTC_BACK,
+        FILTER_DEFAULT_IVTC_GTHRESH, FILTER_DEFAULT_IVTC_VTHRESH,
+        FILTER_DEFAULT_IVTC_HYSTERESIS);
 #endif
 #if ENABLE_VPP_FILTER_BWDIF
     str += strsprintf(_T("\n")
@@ -13179,6 +14651,26 @@ tstring gen_cmd_help_vpp() {
         _T("      thr=<float>           skip-interpolation threshold, 0.0..100.0 (%% of value range).\n")
         _T("                              motion below this returns pure temporal average. default 0.0\n")
         _T("      log=<path|bool>       write per-frame TSV decision log to <path>\n"));
+#endif
+#if ENABLE_VPP_FILTER_MAA
+    str += strsprintf(_T("\n")
+        _T("   --vpp-maa [<param1>=<value>][,<param2>=<value>][...]\n")
+        _T("     masked anti-aliasing for animated content (anime, cel-shaded).\n")
+        _T("     combines directional 9-cost AA with edge masking to anti-alias diagonal\n")
+        _T("     lines without damaging non-edge content.\n")
+        _T("    params\n")
+        _T("      ss=<float>            supersample factor (default 2.0; range 1.0..4.0).\n")
+        _T("      aa=<int>              luma AA strength (default 48; range 0..255).\n")
+        _T("      aac=<int>             chroma AA strength (default aa-8; range 0..255).\n")
+        _T("                              only used when chroma=on.\n")
+        _T("      mask=<bool>           enable edge mask (default on).\n")
+        _T("      mthresh=<int>         edge threshold (default 7; range 1..255).\n")
+        _T("                              higher = fewer pixels treated as edges.\n")
+        _T("      chroma=<bool>         process chroma planes (default off; ~50-100%% slower).\n")
+        _T("      show=<int>            debug overlay (0=normal, 1=mask only, 2=mask+AA).\n")
+        _T("                              default 0.\n")
+        _T("      edge=<string>         edge operator: sobel(default), prewitt, sobel_full,\n")
+        _T("                              scharr, kirsch, laplacian.\n"));
 #endif
 #if ENABLE_VPP_FILTER_RFF
     str += strsprintf(_T("\n")
@@ -13232,7 +14724,7 @@ tstring gen_cmd_help_vpp() {
         FILTER_DEFAULT_MPDECIMATE_FRAC, FILTER_DEFAULT_MPDECIMATE_MAX,
         FILTER_DEFAULT_DECIMATE_LOG ? _T("on") : _T("off"));
 #endif
-#if ENABLE_NVVFX || ENABLE_NVSDKNGX || ENCODER_QSV
+#if ENABLE_NVVFX || ENABLE_NVSDKNGX || ENCODER_QSV || ENCODER_NVENC
     {
         str += strsprintf(_T("\n")
             _T("--vpp-resize <string> or [<param1>=<value>][,<param2>=<value>][...]\n")
@@ -13265,6 +14757,10 @@ tstring gen_cmd_help_vpp() {
                 _T("      vsr-quality=<int>\n")
                 _T("        quality for ngx-vsr\n"));
 #endif
+        str += strsprintf(_T("\n")
+            _T("      sharpness=<float>\n")
+            _T("        sharpness for fsr1 (0.0 - 1.0, default = %.1f)\n"),
+            FILTER_DEFAULT_RESIZE_FSR1_SHARPNESS);
 #if ENCODER_QSV
             str += strsprintf(_T("\n")
                 _T("      superres-mode=<string>\n")
@@ -13327,7 +14823,7 @@ tstring gen_cmd_help_vpp() {
         _T("   --vpp-nlmeans [<param1>=<value>][,<param2>=<value>][...]\n")
         _T("     enable denoise filter by non-local means.\n")
         _T("    params\n")
-        _T("      sigma=<float>  sigma (default=%.3, 0.0 -)\n")
+        _T("      sigma=<float>  sigma (default=%.3f, 0.0 -)\n")
         _T("      h=<float>      h (default=%.3f, 0.0 <)\n")
 #if ENCODER_NVENC
         _T("      patch=<int>    patch size (default=%d, 3-21)\n")
@@ -13338,9 +14834,12 @@ tstring gen_cmd_help_vpp() {
 #endif
         _T("      fp16=<string>  select fp16 usage.\n")
         _T("                       none, blockdiff (default), all\n")
+        _T("      d=<int>        temporal radius (default=%d, 0-%d)\n")
+        _T("      search_t=<int> temporal search size (default=%d, 3-)\n")
         ,
         FILTER_DEFAULT_NLMEANS_FILTER_SIGMA, FILTER_DEFAULT_NLMEANS_H,
-        FILTER_DEFAULT_NLMEANS_PATCH_SIZE, FILTER_DEFAULT_NLMEANS_SEARCH_SIZE
+        FILTER_DEFAULT_NLMEANS_PATCH_SIZE, FILTER_DEFAULT_NLMEANS_SEARCH_SIZE,
+        FILTER_DEFAULT_NLMEANS_D, FILTER_NLMEANS_D_MAX, FILTER_DEFAULT_NLMEANS_SEARCH_SIZE
         //,FILTER_DEFAULT_NLMEANS_FILTER_SIGMA, FILTER_DEFAULT_NLMEANS_PATCH_SIGMA,
         );
 #endif
@@ -13354,6 +14853,42 @@ tstring gen_cmd_help_vpp() {
         _T("      threshold=<float>         threshold of pmd (default=%.2f, 0.0-255.0)\n")
         _T("                                  lower value will preserve edge.\n"),
         FILTER_DEFAULT_PMD_APPLY_COUNT, FILTER_DEFAULT_PMD_STRENGTH, FILTER_DEFAULT_PMD_THRESHOLD);
+#endif
+#if ENABLE_VPP_FILTER_HQDN3D
+    str += strsprintf(_T("\n")
+        _T("   --vpp-hqdn3d [<param1>=<value>][,<param2>=<value>][...]\n")
+        _T("     enable denoise filter by hqdn3d.\n")
+        _T("    params\n")
+        _T("      luma_spatial=<float>     spatial denoise strength for luma (default=%.2f, 0.0-255.0)\n")
+        _T("      chroma_spatial=<float>   spatial denoise strength for chroma (default=%.2f, 0.0-255.0)\n")
+        _T("      luma_temporal=<float>    temporal denoise strength for luma (default=%.2f, 0.0-255.0)\n")
+        _T("      chroma_temporal=<float>  temporal denoise strength for chroma (default=%.2f, 0.0-255.0)\n"),
+        FILTER_DEFAULT_HQDN3D_LUMA_SPATIAL, FILTER_DEFAULT_HQDN3D_CHROMA_SPATIAL,
+        FILTER_DEFAULT_HQDN3D_LUMA_TEMPORAL, FILTER_DEFAULT_HQDN3D_CHROMA_TEMPORAL);
+#endif
+#if ENABLE_VPP_FILTER_DESCALE
+    str += strsprintf(_T("\n")
+        _T("   --vpp-descale [<param1>=<value>][,<param2>=<value>][...]\n")
+        _T("     undo upscaling by solving the inverse linear system for the known upscaler kernel.\n")
+        _T("    params\n")
+        _T("      kernel=<string>           upscaler kernel: bilinear, bicubic (default), spline16,\n")
+        _T("                                  spline36, spline64, lanczos2, lanczos3, lanczos4, auto\n")
+        _T("      width=<int>               target native width\n")
+        _T("      height=<int>              target native height\n")
+        _T("      b=<float>                 bicubic b parameter (default=%.2f)\n")
+        _T("      c=<float>                 bicubic c parameter (default=%.2f)\n")
+        _T("      src_left=<float>          source horizontal sub-pixel offset (default=%.2f)\n")
+        _T("      src_top=<float>           source vertical sub-pixel offset (default=%.2f)\n")
+        _T("      border_handling=<string>  mirror (default), zero, repeat\n")
+        _T("      auto=<bool>               shorthand for kernel=auto and native resolution search\n")
+        _T("      search_min=<int>          minimum candidate height (default: input_height * 0.5)\n")
+        _T("      search_max=<int>          maximum candidate height (default: input_height - 1)\n")
+        _T("      search_step=<int>         fine-pass step in pixels (default=%d)\n")
+        _T("      detect_frames=<int>       frames to average before locking (default=%d)\n")
+        _T("      show_scores=<bool>        log per-candidate error scores (default=false)\n"),
+        FILTER_DEFAULT_DESCALE_BICUBIC_B, FILTER_DEFAULT_DESCALE_BICUBIC_C,
+        FILTER_DEFAULT_DESCALE_SRC_LEFT, FILTER_DEFAULT_DESCALE_SRC_TOP,
+        FILTER_DEFAULT_DESCALE_SEARCH_STEP, FILTER_DEFAULT_DESCALE_DETECT_FRAMES);
 #endif
 #if ENABLE_VPP_FILTER_SMOOTH
     str += strsprintf(_T("\n")
@@ -13472,9 +15007,12 @@ tstring gen_cmd_help_vpp() {
         _T("    params\n")
         _T("      strength=<int>            smoothing iterations (default=%d, 0 - 20)\n")
         _T("      threshold=<float>         edge detection threshold (default=%.1f, 0.0 - 255.0)\n")
+        _T("      threshold_c=<float>       chroma edge detection threshold (default=%.1f,\n")
+        _T("                                  -1.0: same as threshold, 0.0 - 255.0)\n")
         _T("      highq=<bool>              high quality edge detection (default=%s)\n")
         _T("      mask=<bool>               output edge mask only (default=%s)\n"),
         FILTER_DEFAULT_MSMOOTH_STRENGTH, FILTER_DEFAULT_MSMOOTH_THRESHOLD,
+        FILTER_DEFAULT_MSMOOTH_THRESHOLD_C,
         FILTER_DEFAULT_MSMOOTH_HIGHQ ? _T("true") : _T("false"),
         FILTER_DEFAULT_MSMOOTH_MASK  ? _T("true") : _T("false"));
 #endif
@@ -13558,6 +15096,98 @@ tstring gen_cmd_help_vpp() {
         _T("      threshold=<float>         min brightness change to be sharpened (default=%.2f, 0-255)\n"),
         FILTER_DEFAULT_UNSHARP_RADIUS, FILTER_DEFAULT_UNSHARP_WEIGHT, FILTER_DEFAULT_UNSHARP_THRESHOLD);
 #endif
+#if ENABLE_VPP_FILTER_VINVERSE
+    str += strsprintf(_T("\n")
+        _T("   --vpp-vinverse [<param1>=<value>][,<param2>=<value>][...]\n")
+        _T("     remove residual interlaced combing after deinterlace.\n")
+        _T("    params\n")
+        _T("      mode=<string>             filter mode (default=vinverse)\n")
+        _T("                                  vinverse, vinverse2\n")
+        _T("      sstr=<float>              contra reference strength (default=%.2f, 0.0 - 8.0)\n")
+        _T("      amnt=<float>              max delta per pixel in 8-bit scale (default=%.1f, 0.0 - 255.0)\n")
+        _T("      scl=<float>               soft clip scale (default=%.2f, 0.0 - 4.0)\n")
+        _T("      thr=<float>               untouched residual threshold in 8-bit scale (default=%.1f, 0.0 - 255.0)\n")
+        _T("      chroma=<bool>             process chroma planes (default=%s)\n"),
+        FILTER_DEFAULT_VINVERSE_SSTR, FILTER_DEFAULT_VINVERSE_AMNT,
+        FILTER_DEFAULT_VINVERSE_SCL, FILTER_DEFAULT_VINVERSE_THR,
+        FILTER_DEFAULT_VINVERSE_CHROMA ? _T("true") : _T("false"));
+#endif
+#if ENABLE_VPP_FILTER_CHROMASHIFT
+    str += strsprintf(_T("\n")
+        _T("   --vpp-chromashift [<param1>=<value>][,<param2>=<value>][...]\n")
+        _T("     shift chroma planes for chroma/luma alignment correction.\n")
+        _T("    params\n")
+        _T("      x=<float>                 horizontal shift in luma pixels (default=%.2f, -4.0 - 4.0)\n")
+        _T("      y=<float>                 vertical shift in luma pixels (default=%.2f, -4.0 - 4.0)\n")
+        _T("      show=<normal|laplacian>   diagnostic output (default=normal)\n")
+        _T("      auto=<bool>               auto detect shift from early frames (default=%s)\n")
+        _T("      auto_frames=<int>         accepted analysis frames (default=%d, 1-100)\n")
+        _T("      auto_min_pairs=<int>      minimum zero-crossing pairs per frame (default=%d, 10-10000)\n"),
+        FILTER_DEFAULT_CHROMASHIFT_X, FILTER_DEFAULT_CHROMASHIFT_Y,
+        FILTER_DEFAULT_CHROMASHIFT_AUTO ? _T("true") : _T("false"),
+        FILTER_DEFAULT_CHROMASHIFT_AUTO_FRAMES, FILTER_DEFAULT_CHROMASHIFT_AUTO_MIN_PAIRS);
+#endif
+#if ENABLE_VPP_FILTER_DEBLOCK
+    str += strsprintf(_T("\n")
+        _T("   --vpp-deblock [<param1>=<value>][,<param2>=<value>][...]\n")
+        _T("     H.264 style spatial deblocking filter.\n")
+        _T("    params\n")
+        _T("      qp=<int>                  filter strength QP (default=%d, 0-51)\n")
+        _T("      alpha=<int>               alpha offset (default=%d, -6 - 6)\n")
+        _T("      beta=<int>                beta offset (default=%d, -6 - 6)\n")
+        _T("      chroma=<bool>             process planar chroma planes (default=%s)\n"),
+        FILTER_DEFAULT_DEBLOCK_QP, FILTER_DEFAULT_DEBLOCK_ALPHA, FILTER_DEFAULT_DEBLOCK_BETA,
+        FILTER_DEFAULT_DEBLOCK_CHROMA ? _T("true") : _T("false"));
+#endif
+#if ENABLE_VPP_FILTER_DEFLICKER
+    str += strsprintf(_T("\n")
+        _T("   --vpp-deflicker [<param1>=<value>][,<param2>=<value>][...]\n")
+        _T("     temporal brightness stabilization filter.\n")
+        _T("    params\n")
+        _T("      strength=<float>          correction blend strength (default=%.2f, 0.0 - 1.0)\n")
+        _T("      damping=<float>           temporal damping of correction (default=%.2f, 0.0 - 1.0)\n")
+        _T("      scene_threshold=<float>   scene change threshold (default=%.2f, 0.5 - 5.0)\n")
+        _T("      frames=<int>              rolling analysis window (default=%d, 5-300)\n")
+        _T("      predictor=<bool>          use predictor-corrector pass (default=%s)\n")
+        _T("      chroma=<bool>             process chroma planes (default=%s)\n"),
+        FILTER_DEFAULT_DEFLICKER_STRENGTH, FILTER_DEFAULT_DEFLICKER_DAMPING,
+        FILTER_DEFAULT_DEFLICKER_SCENE_THRESHOLD, FILTER_DEFAULT_DEFLICKER_FRAMES,
+        FILTER_DEFAULT_DEFLICKER_PREDICTOR ? _T("true") : _T("false"),
+        FILTER_DEFAULT_DEFLICKER_CHROMA ? _T("true") : _T("false"));
+#endif
+#if ENABLE_VPP_FILTER_STAB
+    str += strsprintf(_T("\n")
+        _T("   --vpp-stab [<param1>=<value>][,<param2>=<value>][...]\n")
+        _T("     camera-shake stabilisation via phase correlation.\n")
+        _T("    params\n")
+        _T("      strength=<float>          correction strength (default=%.2f, 0.0 - 1.0)\n")
+        _T("      damping=<float>           smoothing damping (default=%.2f, 0.0 - 1.0)\n")
+        _T("      trust=<float>             trust threshold (default=%.2f, 0.0 - 1.0)\n")
+        _T("      max_shift=<float>         maximum compensated shift in pixels (default=%.1f, 1 - 256)\n")
+        _T("      border=<string>           border mode (default=black, black|clamp|mirror)\n"),
+        FILTER_DEFAULT_STAB_STRENGTH,
+        FILTER_DEFAULT_STAB_DAMPING,
+        FILTER_DEFAULT_STAB_TRUST_THRESHOLD,
+        FILTER_DEFAULT_STAB_MAX_SHIFT);
+#endif
+#if ENABLE_VPP_FILTER_COLORFIX
+    str += strsprintf(_T("\n")
+        _T("   --vpp-colorfix [<param1>=<value>][,<param2>=<value>][...]\n")
+        _T("     color correction filter.\n")
+        _T("    params\n")
+        _T("      mode=<manual|auto|gray>   correction mode (default=manual)\n")
+        _T("      space=<auto|rgb|yuv>      working color space (default=auto)\n")
+        _T("      matrix=<auto|bt601|bt709|bt2020>\n")
+        _T("                                YUV/RGB conversion matrix (default=auto)\n")
+        _T("      white=<rrggbb>            manual white point (default=ffffff)\n")
+        _T("      black=<rrggbb>            manual black point (default=000000)\n")
+        _T("      frames=<int>              analysis frames for auto/gray (default=%d, 10-5000)\n")
+        _T("      strength=<float>          correction strength for auto/gray (default=%.2f, 0.0 - 1.0)\n")
+        _T("      variance_threshold=<float>\n")
+        _T("                                flash/fade rejection threshold (default=%.2f, >0)\n"),
+        FILTER_DEFAULT_COLORFIX_FRAMES, FILTER_DEFAULT_COLORFIX_STRENGTH,
+        FILTER_DEFAULT_COLORFIX_VARIANCE_THRESHOLD);
+#endif
 #if ENABLE_VPP_FILTER_EDGELEVEL
     str += strsprintf(_T("\n")
         _T("   --vpp-edgelevel [<param1>=<value>][,<param2>=<value>][...]\n")
@@ -13571,6 +15201,66 @@ tstring gen_cmd_help_vpp() {
         _T("                                  (default=%.1f, 0-31)\n"),
         FILTER_DEFAULT_EDGELEVEL_STRENGTH, FILTER_DEFAULT_EDGELEVEL_THRESHOLD, FILTER_DEFAULT_EDGELEVEL_BLACK, FILTER_DEFAULT_EDGELEVEL_WHITE);
 #endif
+#if ENABLE_VPP_FILTER_DEHALO
+    str += strsprintf(_T("\n")
+        _T("   --vpp-dehalo [<param1>=<value>][,<param2>=<value>][...]\n")
+        _T("     halo removal filter. Applies correction to luma and copies chroma unchanged.\n")
+        _T("    params\n")
+        _T("      rx=<float>                horizontal halo radius (default=%.2f, 0.5 - 10.0)\n")
+        _T("      ry=<float>                vertical halo radius (default=%.2f, 0.5 - 10.0)\n")
+        _T("      darkstr=<float>           bright-halo darkening strength (default=%.2f, 0.0 - 1.0)\n")
+        _T("      brightstr=<float>         dark-halo brightening strength (default=%.2f, 0.0 - 1.0)\n")
+        _T("      lowsens=<int>             sensitivity ramp lower anchor (default=%d, 0 - 100)\n")
+        _T("      highsens=<int>            sensitivity ramp upper anchor (default=%d, 0 - 100)\n")
+        _T("      ss=<float>                supersampling ratio (default=%.2f, 1.0 - 4.0)\n"),
+        FILTER_DEFAULT_DEHALO_RX, FILTER_DEFAULT_DEHALO_RY,
+        FILTER_DEFAULT_DEHALO_DARKSTR, FILTER_DEFAULT_DEHALO_BRIGHTSTR,
+        FILTER_DEFAULT_DEHALO_LOWSENS, FILTER_DEFAULT_DEHALO_HIGHSENS,
+        FILTER_DEFAULT_DEHALO_SS);
+#endif
+#if ENABLE_VPP_FILTER_FINEDEHALO
+    str += strsprintf(_T("\n")
+        _T("   --vpp-finedehalo [<param1>=<value>][,<param2>=<value>][...]\n")
+        _T("     fine halo removal filter. Applies correction to luma and copies chroma unchanged.\n")
+        _T("    params\n")
+        _T("      rx=<float>                horizontal halo radius (default=%.2f, 0.5 - 10.0)\n")
+        _T("      ry=<float>                vertical halo radius (default=%.2f, 0.5 - 10.0)\n")
+        _T("      darkstr=<float>           bright-halo darkening strength (default=%.2f, 0.0 - 1.0)\n")
+        _T("      brightstr=<float>         dark-halo brightening strength (default=%.2f, 0.0 - 1.0)\n")
+        _T("      lowsens=<int>             dehalo sensitivity lower anchor (default=%d, 0 - 100)\n")
+        _T("      highsens=<int>            dehalo sensitivity upper anchor (default=%d, 0 - 100)\n")
+        _T("      ss=<float>                supersampling ratio (default=%.2f, 1.0 - 4.0)\n")
+        _T("      thmi=<int>                edge mask lower threshold (default=%d, 0 - 255)\n")
+        _T("      thma=<int>                edge mask upper threshold (default=%d, 0 - 255)\n")
+        _T("      thlimi=<int>              limit mask lower threshold (default=%d, 0 - 255)\n")
+        _T("      thlima=<int>              limit mask upper threshold (default=%d, 0 - 255)\n")
+        _T("      showmask=<int>            debug mask output (default=%d, 0 - 4)\n")
+        _T("      edge=<string>             edge operator (default=%s, prewitt|sobel|scharr|kirsch|laplacian)\n"),
+        FILTER_DEFAULT_DEHALO_RX, FILTER_DEFAULT_DEHALO_RY,
+        FILTER_DEFAULT_DEHALO_DARKSTR, FILTER_DEFAULT_DEHALO_BRIGHTSTR,
+        FILTER_DEFAULT_DEHALO_LOWSENS, FILTER_DEFAULT_DEHALO_HIGHSENS,
+        FILTER_DEFAULT_DEHALO_SS,
+        FILTER_DEFAULT_FINEDEHALO_THMI, FILTER_DEFAULT_FINEDEHALO_THMA,
+        FILTER_DEFAULT_FINEDEHALO_THLIMI, FILTER_DEFAULT_FINEDEHALO_THLIMA,
+        FILTER_DEFAULT_FINEDEHALO_SHOWMASK, FILTER_DEFAULT_FINEDEHALO_EDGE);
+#endif
+#if ENABLE_VPP_FILTER_HQDERING
+    str += strsprintf(_T("\n")
+        _T("   --vpp-hqdering [<param1>=<value>][,<param2>=<value>][...]\n")
+        _T("     DCT ringing reduction filter. Applies correction to luma and copies chroma unchanged.\n")
+        _T("    params\n")
+        _T("      mrad=<int>                ring mask expansion radius (default=%d, 1 - 3)\n")
+        _T("      mthr=<int>                edge mask threshold (default=%d, 0 - 255)\n")
+        _T("      sigma=<float>             Gaussian blur sigma (default=%.2f, 0.5 - 5.0)\n")
+        _T("      showmask=<bool>           output effective mask only (default=%s)\n")
+        _T("      protect=<bool>            protect original edge pixels (default=%s)\n")
+        _T("      edge=<string>             edge operator (default=%s, log|sobel|prewitt|scharr|kirsch|laplacian)\n"),
+        FILTER_DEFAULT_HQDERING_MRAD, FILTER_DEFAULT_HQDERING_MTHR,
+        FILTER_DEFAULT_HQDERING_SIGMA,
+        FILTER_DEFAULT_HQDERING_SHOWMASK ? _T("true") : _T("false"),
+        FILTER_DEFAULT_HQDERING_PROTECT ? _T("true") : _T("false"),
+        FILTER_DEFAULT_HQDERING_EDGE);
+#endif
 #if ENABLE_VPP_FILTER_MSHARPEN
     str += strsprintf(_T("\n")
         _T("   --vpp-msharpen [<param1>=<value>][,<param2>=<value>][...]\n")
@@ -13578,11 +15268,27 @@ tstring gen_cmd_help_vpp() {
         _T("    params\n")
         _T("      strength=<float>          sharpening strength (default=%.2f, 0.0 - 1.0)\n")
         _T("      threshold=<float>         edge detection threshold (default=%.1f, 0.0 - 255.0)\n")
+        _T("      slope=<float>             sigmoid soft mask slope (default=%.1f, 0.0 -)\n")
+        _T("      luma_limit=<float>        attenuate sharpening in dark luma areas (default=%.1f, 0.0 - 255.0)\n")
+        _T("      block_protect=<float>     attenuate near DCT block boundaries (default=%.1f, 0.0 - 1.0)\n")
         _T("      highq=<bool>              high quality edge detection (default=%s)\n")
         _T("      mask=<bool>               output edge mask only (default=%s)\n"),
         FILTER_DEFAULT_MSHARPEN_STRENGTH, FILTER_DEFAULT_MSHARPEN_THRESHOLD,
+        FILTER_DEFAULT_MSHARPEN_SLOPE,
+        FILTER_DEFAULT_MSHARPEN_LUMA_LIMIT,
+        FILTER_DEFAULT_MSHARPEN_BLOCK_PROTECT,
         FILTER_DEFAULT_MSHARPEN_HIGHQ ? _T("true") : _T("false"),
         FILTER_DEFAULT_MSHARPEN_MASK  ? _T("true") : _T("false"));
+#endif
+#if ENABLE_VPP_FILTER_CAS
+    str += strsprintf(_T("\n")
+        _T("   --vpp-cas [<param1>=<value>][,<param2>=<value>][...]\n")
+        _T("     luma-only Contrast Adaptive Sharpening filter.\n")
+        _T("    params\n")
+        _T("      sharpness=<float>         sharpening strength (default=%.2f, 0.0 - 1.0)\n")
+        _T("      hdr=<bool>                skip SDR gamma 2.0 luma approximation (default=%s)\n"),
+        FILTER_DEFAULT_CAS_SHARPNESS,
+        FILTER_DEFAULT_CAS_HDR ? _T("true") : _T("false"));
 #endif
 #if ENABLE_VPP_FILTER_WARPSHARP
     str += strsprintf(_T("\n")
@@ -13595,9 +15301,18 @@ tstring gen_cmd_help_vpp() {
         _T("      type=<int>                blur type, 0...13x13, 1...5x5 (default=%d)\n")
         _T("      depth=<float>             how far to warp (default=%.1f, -128 - 128)\n")
         _T("      chroma=<int>              0...use luma mask, 1...create chroma mask\n")
-        _T("                                  (default=%d)\n"),
+        _T("                                  (default=%d)\n")
+        _T("      depth_min=<float>         adaptive depth at weak edges\n")
+        _T("                                  (default=depth, -128 - 128)\n")
+        _T("      depth_max=<float>         adaptive depth at strong edges\n")
+        _T("                                  (default=depth, -128 - 128)\n")
+        _T("      edge_thr=<float>          mask level reaching depth_max\n")
+        _T("                                  (default=%.1f, 1 - 255)\n")
+        _T("      gamma=<float>             adaptive depth response curve\n")
+        _T("                                  (default=%.2f, 0.01 - 8.0)\n"),
         FILTER_DEFAULT_WARPSHARP_THRESHOLD, FILTER_DEFAULT_WARPSHARP_BLUR, FILTER_DEFAULT_WARPSHARP_TYPE,
-        FILTER_DEFAULT_WARPSHARP_DEPTH, FILTER_DEFAULT_WARPSHARP_CHROMA);
+        FILTER_DEFAULT_WARPSHARP_DEPTH, FILTER_DEFAULT_WARPSHARP_CHROMA,
+        FILTER_DEFAULT_WARPSHARP_EDGE_THR, FILTER_DEFAULT_WARPSHARP_GAMMA);
 #endif
 #if ENABLE_VPP_FILTER_DETAILSHARPEN
     str += strsprintf(_T("\n")

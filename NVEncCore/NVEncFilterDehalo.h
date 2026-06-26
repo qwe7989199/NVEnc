@@ -31,29 +31,35 @@
 #include "NVEncFilter.h"
 #include "rgy_prm.h"
 
-class NVEncFilterParamMsmooth : public NVEncFilterParam {
+class NVEncFilterParamDehalo : public NVEncFilterParam {
 public:
-    VppMsmooth msmooth;
+    VppDehalo dehalo;
 
-    NVEncFilterParamMsmooth() : msmooth() {};
-    virtual ~NVEncFilterParamMsmooth() {};
+    NVEncFilterParamDehalo() : dehalo() {};
+    virtual ~NVEncFilterParamDehalo() {};
     virtual tstring print() const override;
 };
 
-class NVEncFilterMsmooth : public NVEncFilter {
+class NVEncFilterDehalo : public NVEncFilter {
 public:
-    NVEncFilterMsmooth();
-    virtual ~NVEncFilterMsmooth();
+    NVEncFilterDehalo();
+    virtual ~NVEncFilterDehalo();
     virtual RGY_ERR init(shared_ptr<NVEncFilterParam> pParam, shared_ptr<RGYLog> pPrintMes) override;
 protected:
     virtual RGY_ERR run_filter(const RGYFrameInfo *pInputFrame, RGYFrameInfo **ppOutputFrames, int *pOutputFrameNum, cudaStream_t stream) override;
     virtual void close() override;
-private:
-    RGY_ERR procPlaneBlurMask(RGYFrameInfo *pOutputFrame, const RGYFrameInfo *pInputFrame,
-        float threshold, bool highq, cudaStream_t stream);
-    RGY_ERR procPlaneSmooth(RGYFrameInfo *pOutputFrame, const RGYFrameInfo *pInputFrame, const RGYFrameInfo *pMaskFrame, cudaStream_t stream);
-    RGY_ERR procPlane(RGYFrameInfo *pOutputFrame, const RGYFrameInfo *pInputFrame, int ip, int strength, float threshold, bool highq, cudaStream_t stream);
-    RGY_ERR procFrame(RGYFrameInfo *pOutputFrame, const RGYFrameInfo *pInputFrame, cudaStream_t stream);
-    std::vector<std::unique_ptr<CUFrameBuf>> m_mask;
-    std::vector<std::unique_ptr<CUFrameBuf>> m_tmp[2];
+
+    RGY_ERR checkParam(const std::shared_ptr<NVEncFilterParamDehalo> prm);
+    RGY_ERR allocWorkFrame(std::unique_ptr<CUFrameBuf>& frame, const RGYFrameInfo& frameInfo, const TCHAR *label);
+
+    std::unique_ptr<NVEncFilterResize> m_resizeUp;
+    std::unique_ptr<NVEncFilterResize> m_resizeDown;
+    std::unique_ptr<CUFrameBuf> m_supersampled;
+    std::unique_ptr<CUFrameBuf> m_expanded;
+    std::unique_ptr<CUFrameBuf> m_inpand;
+    std::unique_ptr<CUFrameBuf> m_mask;
+    std::unique_ptr<CUFrameBuf> m_corrected;
+    int  m_ssW;
+    int  m_ssH;
+    bool m_ssActive;
 };

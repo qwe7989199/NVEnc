@@ -28,32 +28,42 @@
 
 #pragma once
 
+#include <array>
+#include <vector>
 #include "NVEncFilter.h"
 #include "rgy_prm.h"
 
-class NVEncFilterParamMsmooth : public NVEncFilterParam {
-public:
-    VppMsmooth msmooth;
+static const int HQDN3D_LUT_RADIUS = 256;
 
-    NVEncFilterParamMsmooth() : msmooth() {};
-    virtual ~NVEncFilterParamMsmooth() {};
+class NVEncFilterParamDenoiseHqdn3d : public NVEncFilterParam {
+public:
+    VppHqdn3d hqdn3d;
+
+    NVEncFilterParamDenoiseHqdn3d() : hqdn3d() {};
+    virtual ~NVEncFilterParamDenoiseHqdn3d() {};
     virtual tstring print() const override;
 };
 
-class NVEncFilterMsmooth : public NVEncFilter {
+class NVEncFilterDenoiseHqdn3d : public NVEncFilter {
 public:
-    NVEncFilterMsmooth();
-    virtual ~NVEncFilterMsmooth();
+    NVEncFilterDenoiseHqdn3d();
+    virtual ~NVEncFilterDenoiseHqdn3d();
     virtual RGY_ERR init(shared_ptr<NVEncFilterParam> pParam, shared_ptr<RGYLog> pPrintMes) override;
 protected:
     virtual RGY_ERR run_filter(const RGYFrameInfo *pInputFrame, RGYFrameInfo **ppOutputFrames, int *pOutputFrameNum, cudaStream_t stream) override;
     virtual void close() override;
 private:
-    RGY_ERR procPlaneBlurMask(RGYFrameInfo *pOutputFrame, const RGYFrameInfo *pInputFrame,
-        float threshold, bool highq, cudaStream_t stream);
-    RGY_ERR procPlaneSmooth(RGYFrameInfo *pOutputFrame, const RGYFrameInfo *pInputFrame, const RGYFrameInfo *pMaskFrame, cudaStream_t stream);
-    RGY_ERR procPlane(RGYFrameInfo *pOutputFrame, const RGYFrameInfo *pInputFrame, int ip, int strength, float threshold, bool highq, cudaStream_t stream);
-    RGY_ERR procFrame(RGYFrameInfo *pOutputFrame, const RGYFrameInfo *pInputFrame, cudaStream_t stream);
-    std::vector<std::unique_ptr<CUFrameBuf>> m_mask;
-    std::vector<std::unique_ptr<CUFrameBuf>> m_tmp[2];
+    RGY_ERR denoisePlane(RGYFrameInfo *pOutputPlane, const RGYFrameInfo *pInputPlane,
+        CUMemBuf *pCoefSpatial, CUMemBuf *pCoefTemporal,
+        CUMemBuf *pPrev, int prevPitchFloats, cudaStream_t stream);
+    RGY_ERR denoiseFrame(RGYFrameInfo *pOutputFrame, const RGYFrameInfo *pInputFrame, cudaStream_t stream);
+    static void precalcCoefs(std::vector<float> &table, double dist25);
+
+    std::array<std::unique_ptr<CUMemBuf>, 4> m_coefs;
+    std::vector<std::unique_ptr<CUMemBuf>> m_framePrev;
+    std::vector<int> m_framePrevPitchFloats;
+    std::unique_ptr<CUMemBuf> m_tmpH;
+    std::unique_ptr<CUMemBuf> m_tmpHV;
+    int m_tmpPitchFloats;
+    bool m_firstFrame;
 };

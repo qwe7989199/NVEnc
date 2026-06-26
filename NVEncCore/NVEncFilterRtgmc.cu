@@ -559,6 +559,7 @@ RGY_ERR NVEncFilterRtgmc::initSourceMatchCorrectionFilters(const std::shared_ptr
             param->nnsize = prm->rtgmc.matchEdi.nnsize;
             param->nneurons = prm->rtgmc.matchEdi.nneurons;
             param->ediqual = prm->rtgmc.matchEdi.ediqual;
+            param->order = prm->rtgmc.bob.order;
             param->sourceFrameIn = sourceFrameIn;
             param->sourceBaseFps = sourceBaseFps;
             param->sourceTimebase = sourceTimebase;
@@ -594,6 +595,7 @@ RGY_ERR NVEncFilterRtgmc::initSourceMatchCorrectionFilters(const std::shared_ptr
             pass.correctionTemporalFilter = std::make_unique<NVEncFilterDegrain>();
             auto param = std::make_shared<NVEncFilterParamDegrain>();
             param->degrain = (stageIdx == 0) ? prm->rtgmc.tr1 : prm->rtgmc.tr2;
+            param->degrain.chroma = processSourceMatchChroma;
             if (param->degrain.overlap != 0 && param->degrain.overlap * 2 != param->degrain.blksize) {
                 AddMessage(RGY_LOG_WARN,
                     _T("source-match correction overlap=%d is adjusted to %d because the current Degrain backend supports overlap=0 or blksize/2.\n"),
@@ -1501,6 +1503,7 @@ RGY_ERR NVEncFilterRtgmc::initFilters(const std::shared_ptr<NVEncFilterParamRtgm
             param->nnsize = prm->rtgmc.edi.nnsize;
             param->nneurons = prm->rtgmc.edi.nneurons;
             param->ediqual = prm->rtgmc.edi.ediqual;
+            param->order = prm->rtgmc.bob.order;
             param->sourceFrameIn = currentFrame;
             param->sourceBaseFps = prm->baseFps;
             param->sourceTimebase = prm->timebase;

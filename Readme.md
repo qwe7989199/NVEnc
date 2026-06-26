@@ -118,6 +118,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND.
     - transpose / rotate / flip
     - padding
     - select-every
+    - stab
     - deband
       - deband
       - [libplacebo](https://code.videolan.org/videolan/libplacebo)
@@ -134,6 +135,9 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND.
     - edge / detail enhancement
       - unsharp
       - edgelevel (edge ​​level adjustment)
+      - dehalo
+      - finedehalo
+      - hqdering
       - warpsharp
 
 ### NVEnc.auo (Aviutl plugin)
