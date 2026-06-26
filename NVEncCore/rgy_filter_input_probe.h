@@ -1,5 +1,5 @@
 ﻿// -----------------------------------------------------------------------------------------
-// NVEnc by rigaya
+// QSVEnc/NVEnc/VCEEnc by rigaya
 // -----------------------------------------------------------------------------------------
 //
 // The MIT License
@@ -27,33 +27,25 @@
 // ------------------------------------------------------------------------------------------
 
 #pragma once
+#ifndef __RGY_FILTER_INPUT_PROBE_H__
+#define __RGY_FILTER_INPUT_PROBE_H__
 
-#include "NVEncFilter.h"
-#include "rgy_prm.h"
+#include <cstring>
+#include <string>
+#include "rgy_avutil.h"
 
-class NVEncFilterParamMsmooth : public NVEncFilterParam {
-public:
-    VppMsmooth msmooth;
+inline const char *unsupportedProbeProtocol(const std::string &filename) {
+    if (filename == "-") {
+        return "stdin";
+    }
+    if (filename.c_str() == std::strstr(filename.c_str(), R"(\\.\pipe\)")) {
+        return "windows named pipe";
+    }
+    const char *protocol = avio_find_protocol_name(filename.c_str());
+    if (protocol != nullptr && std::strcmp(protocol, "file") != 0) {
+        return protocol;
+    }
+    return nullptr;
+}
 
-    NVEncFilterParamMsmooth() : msmooth() {};
-    virtual ~NVEncFilterParamMsmooth() {};
-    virtual tstring print() const override;
-};
-
-class NVEncFilterMsmooth : public NVEncFilter {
-public:
-    NVEncFilterMsmooth();
-    virtual ~NVEncFilterMsmooth();
-    virtual RGY_ERR init(shared_ptr<NVEncFilterParam> pParam, shared_ptr<RGYLog> pPrintMes) override;
-protected:
-    virtual RGY_ERR run_filter(const RGYFrameInfo *pInputFrame, RGYFrameInfo **ppOutputFrames, int *pOutputFrameNum, cudaStream_t stream) override;
-    virtual void close() override;
-private:
-    RGY_ERR procPlaneBlurMask(RGYFrameInfo *pOutputFrame, const RGYFrameInfo *pInputFrame,
-        float threshold, bool highq, cudaStream_t stream);
-    RGY_ERR procPlaneSmooth(RGYFrameInfo *pOutputFrame, const RGYFrameInfo *pInputFrame, const RGYFrameInfo *pMaskFrame, cudaStream_t stream);
-    RGY_ERR procPlane(RGYFrameInfo *pOutputFrame, const RGYFrameInfo *pInputFrame, int ip, int strength, float threshold, bool highq, cudaStream_t stream);
-    RGY_ERR procFrame(RGYFrameInfo *pOutputFrame, const RGYFrameInfo *pInputFrame, cudaStream_t stream);
-    std::vector<std::unique_ptr<CUFrameBuf>> m_mask;
-    std::vector<std::unique_ptr<CUFrameBuf>> m_tmp[2];
-};
+#endif // __RGY_FILTER_INPUT_PROBE_H__

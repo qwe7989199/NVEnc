@@ -31,29 +31,22 @@
 #include "NVEncFilter.h"
 #include "rgy_prm.h"
 
-class NVEncFilterParamMsmooth : public NVEncFilterParam {
+class NVEncFilterParamDeblock : public NVEncFilterParam {
 public:
-    VppMsmooth msmooth;
+    VppDeblock deblock;
 
-    NVEncFilterParamMsmooth() : msmooth() {};
-    virtual ~NVEncFilterParamMsmooth() {};
+    NVEncFilterParamDeblock() : deblock() {};
+    virtual ~NVEncFilterParamDeblock() {};
     virtual tstring print() const override;
 };
 
-class NVEncFilterMsmooth : public NVEncFilter {
+class NVEncFilterDeblock : public NVEncFilter {
 public:
-    NVEncFilterMsmooth();
-    virtual ~NVEncFilterMsmooth();
+    NVEncFilterDeblock();
+    virtual ~NVEncFilterDeblock();
     virtual RGY_ERR init(shared_ptr<NVEncFilterParam> pParam, shared_ptr<RGYLog> pPrintMes) override;
 protected:
     virtual RGY_ERR run_filter(const RGYFrameInfo *pInputFrame, RGYFrameInfo **ppOutputFrames, int *pOutputFrameNum, cudaStream_t stream) override;
     virtual void close() override;
-private:
-    RGY_ERR procPlaneBlurMask(RGYFrameInfo *pOutputFrame, const RGYFrameInfo *pInputFrame,
-        float threshold, bool highq, cudaStream_t stream);
-    RGY_ERR procPlaneSmooth(RGYFrameInfo *pOutputFrame, const RGYFrameInfo *pInputFrame, const RGYFrameInfo *pMaskFrame, cudaStream_t stream);
-    RGY_ERR procPlane(RGYFrameInfo *pOutputFrame, const RGYFrameInfo *pInputFrame, int ip, int strength, float threshold, bool highq, cudaStream_t stream);
-    RGY_ERR procFrame(RGYFrameInfo *pOutputFrame, const RGYFrameInfo *pInputFrame, cudaStream_t stream);
-    std::vector<std::unique_ptr<CUFrameBuf>> m_mask;
-    std::vector<std::unique_ptr<CUFrameBuf>> m_tmp[2];
+    RGY_ERR checkParam(const std::shared_ptr<NVEncFilterParamDeblock> pParam);
 };

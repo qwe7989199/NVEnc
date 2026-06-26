@@ -126,6 +126,7 @@ NVEncを使用したことによる、いかなる損害・トラブルについ
     - 回転 / 反転
     - パディング(黒帯)の追加
     - フレーム間引き(select every)
+    - stab
     - バンディング低減
       - deband
       - [libplacebo](https://code.videolan.org/videolan/libplacebo)
@@ -142,6 +143,9 @@ NVEncを使用したことによる、いかなる損害・トラブルについ
     - 輪郭・ディテール強調
       - unsharp
       - edgelevel (エッジレベル調整)
+      - dehalo
+      - finedehalo
+      - hqdering
       - warpsharp
 
 
