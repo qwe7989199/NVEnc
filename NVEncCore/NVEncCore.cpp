@@ -84,6 +84,8 @@
 #include "NVEncFilterMsmooth.h"
 #include "NVEncFilterNvvfx.h"
 #include "NVEncFilterNGX.h"
+#include "NVEncFilterOnnx.h"
+#include "NVEncFilterAnime4k.h"
 #include "NVEncFilterLibplacebo.h"
 #include "NVEncFilterDeband.h"
 #include "NVEncFilterDecimate.h"
@@ -838,23 +840,23 @@ RGY_ERR NVEncCore::InitParallelEncode(InEncodeVideoParam *inputParam, std::vecto
         // とんでもなく大きい値にする人がいそうなので、適当に制限する
         const int maxParallelCount = std::max(4, encoderCount * 2);
         // nvvfx, ngx使用時はGPUメモリ使用量の問題があるため、GPUにつき1スレッドに制限する
-        const bool limitOnePerGPU = inputParam->vppnv.nvvfxArtifactReduction.enable
+        const bool limitOnePerGPU = !inputParam->ctrl.parallelEnc.forceLargeMemoryFilters && (inputParam->vppnv.nvvfxArtifactReduction.enable
             || inputParam->vppnv.nvvfxDenoise.enable
             || inputParam->vppnv.ngxTrueHDR.enable
             || isNvvfxResizeFiter(inputParam->vpp.resize_algo)
-            || isNgxResizeFiter(inputParam->vpp.resize_algo);
+            || isNgxResizeFiter(inputParam->vpp.resize_algo));
         if (inputParam->ctrl.parallelEnc.parallelCount < 0) {
             inputParam->ctrl.parallelEnc.parallelCount = (limitOnePerGPU) ? (int)gpuList.size() : encoderCount;
             PrintMes(RGY_LOG_DEBUG, _T("parallelCount set to %d\n"), inputParam->ctrl.parallelEnc.parallelCount);
         } else if (limitOnePerGPU && inputParam->ctrl.parallelEnc.parallelCount > (int)gpuList.size()) {
             inputParam->ctrl.parallelEnc.parallelCount = (int)gpuList.size();
             if (inputParam->ctrl.parallelEnc.parallelCount <= 1) {
-                PrintMes(RGY_LOG_WARN, _T("Parallel encoding disabled, as nvvfx/ngx filter is enabled, which has large GPU RAM usage.\n"));
+                PrintMes(RGY_LOG_WARN, _T("Parallel encoding disabled, as large memory filter is enabled.\n"));
                 inputParam->ctrl.parallelEnc.parallelCount = 0;
                 inputParam->ctrl.parallelEnc.parallelId = -1;
                 return RGY_ERR_NONE;
             }
-            PrintMes(RGY_LOG_WARN, _T("Parallel count limited to %d, as nvvfx/ngx filter is enabled, which has large GPU RAM usage.\n"), inputParam->ctrl.parallelEnc.parallelCount);
+            PrintMes(RGY_LOG_WARN, _T("Parallel count limited to %d, as large memory filter is enabled.\n"), inputParam->ctrl.parallelEnc.parallelCount);
         } else if (inputParam->ctrl.parallelEnc.parallelCount > maxParallelCount) {
             inputParam->ctrl.parallelEnc.parallelCount = maxParallelCount;
             PrintMes(RGY_LOG_WARN, _T("Parallel count limited to %d.\n"), inputParam->ctrl.parallelEnc.parallelCount);
@@ -3011,6 +3013,8 @@ std::vector<VppType> NVEncCore::InitFiltersCreateVppList(const InEncodeVideoPara
     if (inputParam->vpp.pad.enable)        filterPipeline.push_back(VppType::CL_PAD);
     if (inputParam->vpp.overlay.size() > 0)  filterPipeline.push_back(VppType::CL_OVERLAY);
     if (inputParam->vppnv.ngxTrueHDR.enable)     filterPipeline.push_back(VppType::NGX_TRUEHDR);
+    if (inputParam->vpp.onnx.enable)       filterPipeline.push_back(VppType::CL_ONNX);
+    if (inputParam->vpp.anime4k.enable)     filterPipeline.push_back(VppType::CL_ANIME4K);
     if (inputParam->vpp.fruc.enable)     filterPipeline.push_back(VppType::CL_FRUC);
 
     if (filterPipeline.size() == 0) {
@@ -4445,6 +4449,8 @@ RGY_ERR NVEncCore::AddFilterCUDA(std::vector<std::unique_ptr<NVEncFilter>>& cufi
             param->interp = inputParam->vpp.resize_algo;
         }
         param->fsr1 = inputParam->vpp.resize_fsr1;
+        param->nis = inputParam->vpp.resize_nis;
+        param->bicubic = inputParam->vpp.resize_bicubic;
         if (isNvvfxResizeFiter(inputParam->vpp.resize_algo)) {
             param->nvvfxSuperRes = std::make_shared<NVEncFilterParamNvvfxSuperRes>();
             param->nvvfxSuperRes->nvvfxSuperRes = inputParam->vppnv.nvvfxSuperRes;
@@ -5047,6 +5053,49 @@ RGY_ERR NVEncCore::AddFilterCUDA(std::vector<std::unique_ptr<NVEncFilter>>& cufi
         return RGY_ERR_NONE;
     }
     // fruc
+    if (vppType == VppType::CL_ONNX) {
+        unique_ptr<NVEncFilter> filter(new NVEncFilterOnnx());
+        shared_ptr<NVEncFilterParamOnnx> param(new NVEncFilterParamOnnx());
+        param->onnx = inputParam->vpp.onnx;
+        param->modelDir = inputParam->vpp.onnxModelDir;
+        param->deviceID = m_dev->id();
+        param->frameIn = inputFrame;
+        param->frameOut = inputFrame;
+        param->baseFps = m_encFps;
+        param->bOutOverwrite = false;
+        NVEncCtxAutoLock(cxtlock(m_dev->vidCtxLock()));
+        auto sts = filter->init(param, m_pLog);
+        if (sts != RGY_ERR_NONE) {
+            return sts;
+        }
+        //フィルタチェーンに追加
+        cufilters.push_back(std::move(filter));
+        //パラメータ情報を更新
+        m_pLastFilterParam = std::dynamic_pointer_cast<NVEncFilterParam>(param);
+        //入力フレーム情報を更新
+        inputFrame = param->frameOut;
+        m_encFps = param->baseFps;
+        return RGY_ERR_NONE;
+    }
+    if (vppType == VppType::CL_ANIME4K) {
+        unique_ptr<NVEncFilter> filter(new NVEncFilterAnime4k());
+        shared_ptr<NVEncFilterParamAnime4k> param(new NVEncFilterParamAnime4k());
+        param->anime4k = inputParam->vpp.anime4k;
+        param->frameIn = inputFrame;
+        param->frameOut = inputFrame;
+        param->baseFps = m_encFps;
+        param->bOutOverwrite = false;
+        NVEncCtxAutoLock(cxtlock(m_dev->vidCtxLock()));
+        auto sts = filter->init(param, m_pLog);
+        if (sts != RGY_ERR_NONE) {
+            return sts;
+        }
+        cufilters.push_back(std::move(filter));
+        m_pLastFilterParam = std::dynamic_pointer_cast<NVEncFilterParam>(param);
+        inputFrame = param->frameOut;
+        m_encFps = param->baseFps;
+        return RGY_ERR_NONE;
+    }
     if (vppType == VppType::CL_FRUC) {
         unique_ptr<NVEncFilter> filter(new NVEncFilterNVOFFRUC());
         shared_ptr<NVEncFilterParamNVOFFRUC> param(new NVEncFilterParamNVOFFRUC());

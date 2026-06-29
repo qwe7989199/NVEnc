@@ -74,30 +74,46 @@ if cuda_ver_major < 10
 endif
 
 # CUDAバージョンに応じたGPU code生成オプション
-gpu_code_gen = []
+nvenc_dev_ptx = get_option('nvenc_dev_ptx')
 
-# CUDA 10以下: compute_30も追加
-if cuda_ver_major <= 10
-  gpu_code_gen += ['--generate-code', 'arch=compute_30,code=[compute_30,sm_30]']
-endif
+if nvenc_dev_ptx
+  # 開発ビルド: 環境のGPUのみをビルド対象にして高速化
+  nvidia_smi_result = run_command('nvidia-smi', '--query-gpu=compute_cap', '--format=csv,noheader', check: false)
+  if nvidia_smi_result.returncode() == 0
+    compute_cap = nvidia_smi_result.stdout().strip().split('\n')[0].strip()
+    compute_num = compute_cap.replace('.', '')
+    message('Dev PTX: detected GPU compute_' + compute_num)
+    gpu_code_gen = ['--generate-code', 'arch=compute_' + compute_num + ',code=[compute_' + compute_num + ',sm_' + compute_num + ']']
+  else
+    message('Dev PTX: nvidia-smi unavailable, falling back to compute_75')
+    gpu_code_gen = ['--generate-code', 'arch=compute_75,code=[compute_75,sm_75]']
+  endif
+else
+  gpu_code_gen = []
 
-# CUDA 12以下: compute_50, compute_61追加
-if cuda_ver_major <= 12
-  gpu_code_gen += ['--generate-code', 'arch=compute_50,code=[compute_50,sm_50]']
-  gpu_code_gen += ['--generate-code', 'arch=compute_61,code=[compute_61,sm_61]']
-endif
+  # CUDA 10以下: compute_30も追加
+  if cuda_ver_major <= 10
+    gpu_code_gen += ['--generate-code', 'arch=compute_30,code=[compute_30,sm_30]']
+  endif
 
-# 常に: compute_75
-gpu_code_gen += ['--generate-code', 'arch=compute_75,code=[compute_75,sm_75]']
+  # CUDA 12以下: compute_50, compute_61追加
+  if cuda_ver_major <= 12
+    gpu_code_gen += ['--generate-code', 'arch=compute_50,code=[compute_50,sm_50]']
+    gpu_code_gen += ['--generate-code', 'arch=compute_61,code=[compute_61,sm_61]']
+  endif
 
-# CUDA 11.1以上: compute_86追加
-if (cuda_ver_major == 11 and cuda_ver_minor >= 1) or cuda_ver_major >= 12
-  gpu_code_gen += ['--generate-code', 'arch=compute_86,code=[compute_86,sm_86]']
-endif
+  # 常に: compute_75
+  gpu_code_gen += ['--generate-code', 'arch=compute_75,code=[compute_75,sm_75]']
 
-# CUDA 12.8以上: compute_120追加
-if (cuda_ver_major == 12 and cuda_ver_minor >= 8) or cuda_ver_major >= 13
-  gpu_code_gen += ['--generate-code', 'arch=compute_120,code=[compute_120,sm_120]']
+  # CUDA 11.1以上: compute_86追加
+  if (cuda_ver_major == 11 and cuda_ver_minor >= 1) or cuda_ver_major >= 12
+    gpu_code_gen += ['--generate-code', 'arch=compute_86,code=[compute_86,sm_86]']
+  endif
+
+  # CUDA 12.8以上: compute_120追加
+  if (cuda_ver_major == 12 and cuda_ver_minor >= 8) or cuda_ver_major >= 13
+    gpu_code_gen += ['--generate-code', 'arch=compute_120,code=[compute_120,sm_120]']
+  endif
 endif
 
 message('GPU code generation targets: ' + ' '.join(gpu_code_gen))
@@ -114,6 +130,8 @@ enable_vmaf_option = get_option('enable_vmaf')
 libvmaf_static = get_option('libvmaf_static')
 enable_libvship_option = get_option('enable_libvship')
 enable_vulkan_option = get_option('enable_vulkan')
+enable_onnxruntime_option = get_option('enable_onnxruntime')
+onnxruntime_dir = get_option('onnxruntime_dir')
 
 # ==============================================================================
 # 依存関係検出
@@ -188,6 +206,7 @@ ffmpeg_deps = [
 _ext_headers_dir  = build_root / 'external_headers'
 _vpy_fetched_inc  = _ext_headers_dir / 'vapoursynth-R72' / 'include'
 _avs_fetched_inc  = _ext_headers_dir / 'AviSynthPlus-3.7.5' / 'avs_core' / 'include'
+_ort_fetched_inc  = _ext_headers_dir / 'onnxruntime-1.23.2' / 'include' / 'onnxruntime' / 'core' / 'session'
 
 # VapourSynth ヘッダ自動ダウンロード用シェルスクリプト
 _fetch_vpy_sh = '''
@@ -217,6 +236,21 @@ else
 fi
 tar xf "$dest/avs.tar.gz" -C "$dest" || exit 1
 rm -f "$dest/avs.tar.gz"
+'''
+
+# ONNX Runtime C/C++ APIヘッダ自動ダウンロード用シェルスクリプト
+_fetch_ort_sh = '''
+dest="$1"
+[ -f "$dest/onnxruntime-1.23.2/include/onnxruntime/core/session/onnxruntime_cxx_api.h" ] && exit 0
+mkdir -p "$dest"
+url="https://github.com/microsoft/onnxruntime/archive/refs/tags/v1.23.2.tar.gz"
+if command -v wget >/dev/null 2>&1; then
+  wget -q -O "$dest/onnxruntime.tar.gz" "$url" || exit 1
+else
+  curl -fsSL -o "$dest/onnxruntime.tar.gz" "$url" || exit 1
+fi
+tar xf "$dest/onnxruntime.tar.gz" -C "$dest" --wildcards '*/include/onnxruntime/core/session/*' || exit 1
+rm -f "$dest/onnxruntime.tar.gz"
 '''
 
 vapoursynth_compile_dep = disabler()
@@ -528,6 +562,69 @@ int main(void) {
   endif
 endif
 
+have_onnxruntime_headers = false
+onnxruntime_compile_dep = declare_dependency()
+if enable_onnxruntime_option != 'disabled'
+  onnxruntime_headers_code = '''
+#define ORT_API_MANUAL_INIT
+#include <onnxruntime_cxx_api.h>
+int main(void) { return ORT_API_VERSION > 0 ? 0 : 1; }
+'''
+  onnxruntime_include_dirs = []
+  if onnxruntime_dir != ''
+    onnxruntime_include_dirs += [
+      onnxruntime_dir / 'include',
+      onnxruntime_dir / 'include' / 'onnxruntime' / 'core' / 'session',
+    ]
+  endif
+  onnxruntime_include_dirs += [
+    '/usr/local/include',
+    '/usr/local/include/onnxruntime/core/session',
+    '/usr/include',
+    '/usr/include/onnxruntime/core/session',
+  ]
+  foreach inc_dir : onnxruntime_include_dirs
+    if not have_onnxruntime_headers and fs.is_dir(inc_dir)
+      onnxruntime_candidate_dep = declare_dependency(
+        compile_args: ['-I' + inc_dir]
+      )
+      have_onnxruntime_headers = cpp.compiles(
+        onnxruntime_headers_code,
+        dependencies: onnxruntime_candidate_dep,
+        args: get_option('cpp_args'),
+        name: 'ONNX Runtime headers in ' + inc_dir
+      )
+      if have_onnxruntime_headers
+        onnxruntime_compile_dep = onnxruntime_candidate_dep
+        message('ONNX Runtime headers found in ' + inc_dir)
+      endif
+    endif
+  endforeach
+  if not have_onnxruntime_headers
+    _fetch = run_command(
+      'sh', '-c', _fetch_ort_sh, 'fetch_ort', _ext_headers_dir,
+      check: false,
+    )
+    if _fetch.returncode() == 0
+      onnxruntime_compile_dep = declare_dependency(
+        compile_args: ['-I' + _ort_fetched_inc],
+      )
+      have_onnxruntime_headers = cpp.compiles(
+        onnxruntime_headers_code,
+        dependencies: onnxruntime_compile_dep,
+        args: get_option('cpp_args'),
+        name: 'ONNX Runtime headers in ' + _ort_fetched_inc
+      )
+      if have_onnxruntime_headers
+        message('ONNX Runtime headers fetched into ' + _ort_fetched_inc)
+      endif
+    endif
+  endif
+  if enable_onnxruntime_option == 'enabled' and not have_onnxruntime_headers
+    error('ONNX Runtime headers not found. Set onnxruntime_dir or disable enable_onnxruntime.')
+  endif
+endif
+
 # ==============================================================================
 # libdovi / libhdr10plus (システムにあれば使う、なければビルドディレクトリ内でビルド)
 # ==============================================================================
@@ -689,6 +786,7 @@ conf_data.set10('ENABLE_LIBHDR10PLUS', libhdr10plus_dep.found())
 conf_data.set10('ENABLE_VULKAN', have_vulkan_headers)
 conf_data.set10('ENABLE_LIBPLACEBO', have_libplacebo_headers)
 conf_data.set10('LIBPLACEBO_STATIC_LINK', have_libplacebo_headers and libplacebo_static and have_libplacebo_link)
+conf_data.set10('ENABLE_ONNXRUNTIME', have_onnxruntime_headers)
 conf_data.set10('LIBVMAF_STATIC_LINK', have_vmaf_headers and libvmaf_static and have_vmaf_link)
 conf_data.set10('ENABLE_PERF_COUNTER', false)
 
@@ -791,6 +889,7 @@ nvenccore_sources = files(
   'NVEncCore/NVEncFilterNGX.cpp',
   'NVEncCore/NVEncFilterNVOFFRUC.cpp',
   'NVEncCore/NVEncFilterNvvfx.cpp',
+  'NVEncCore/NVEncFilterOnnx.cpp',
   'NVEncCore/NVEncFilterOverlay.cpp',
   'NVEncCore/NVEncFilterPad.cpp',
   'NVEncCore/NVEncFilterParam.cpp',
@@ -851,7 +950,10 @@ nvenccore_sources = files(
   'NVEncCore/rgy_libvship.cpp',
   'NVEncCore/rgy_log.cpp',
   'NVEncCore/rgy_memmem.cpp',
+  'NVEncCore/rgy_model_registry.cpp',
   'NVEncCore/rgy_nvrtc.cpp',
+  'NVEncCore/rgy_onnxruntime.cpp',
+  'NVEncCore/rgy_onnxrt_cuda.cpp',
   'NVEncCore/rgy_output.cpp',
   'NVEncCore/rgy_output_avcodec.cpp',
   'NVEncCore/rgy_perf_counter.cpp',
@@ -893,6 +995,7 @@ cuda_sources = files(
   'NVEncCore/NVEncFilterAfsSynthesize.cu',
   'NVEncCore/NVEncFilterBwdif.cu',
   'NVEncCore/NVEncFilterIvtc.cu',
+  'NVEncCore/NVEncFilterAnime4k.cu',
   'NVEncCore/NVEncFilterKfm.cu',
   'NVEncCore/NVEncFilterConvolution3d.cu',
   'NVEncCore/NVEncFilterCrop.cu',
@@ -1079,6 +1182,9 @@ endif
 if have_libvship_headers
   all_deps += libvship_compile_dep
 endif
+if have_onnxruntime_headers
+  all_deps += onnxruntime_compile_dep
+endif
 if have_vulkan_headers
   all_deps += vulkan_compile_dep
 endif
@@ -1132,6 +1238,7 @@ summary({
   'VMAF': have_vmaf_headers,
   'VMAF static': have_vmaf_headers and libvmaf_static and have_vmaf_link,
   'libvship': have_libvship_headers,
+  'ONNX Runtime': have_onnxruntime_headers,
   'Vulkan': have_vulkan_headers,
   'libdovi': libdovi_dep.found(),
   'libhdr10plus': libhdr10plus_dep.found(),
