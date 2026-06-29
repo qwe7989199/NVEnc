@@ -265,10 +265,14 @@
   - [--vpp-overlay \[\<param1\>=\<value1\>\]\[,\<param2\>=\<value2\>\],...](#--vpp-overlay-param1value1param2value2)
   - [--vpp-ngx-truehdr \[\<param1\>=\<value1\>\]\[,\<param2\>=\<value2\>\],...](#--vpp-ngx-truehdr-param1value1param2value2)
   - [--vpp-fruc \[\<param1\>=\<value1\>\]\[,\<param2\>=\<value2\>\],...](#--vpp-fruc-param1value1param2value2)
+  - [--vpp-anime4k-shader \[\<param1\>=\<value1\>\]\[,\<param2\>=\<value2\>\],...](#--vpp-anime4k-shader-param1value1param2value2)
+  - [--vpp-onnx \[\<param1\>=\<value1\>\]\[,\<param2\>=\<value2\>\],...](#--vpp-onnx-param1value1param2value2)
+  - [--vpp-onnx-model-dir \<string\>](#--vpp-onnx-model-dir-string)
   - [--vpp-perf-monitor](#--vpp-perf-monitor)
   - [--vpp-nvvfx-model-dir \<string\>](#--vpp-nvvfx-model-dir-string)
 - [制御系のオプション](#制御系のオプション)
   - [--parallel \[\<int\>\] or \[\<string\>\]](#--parallel-int-or-string)
+  - [--parallel-force-large-memory-filters](#--parallel-force-large-memory-filters)
   - [--cuda-schedule \<string\>](#--cuda-schedule-string)
   - [--cuda-stream \<int\>](#--cuda-stream-int)
   - [--cuda-mt \<int\>](#--cuda-mt-int)
@@ -1056,8 +1060,7 @@ avhw読み込みでは、フレームの並び替えにタイムスタンプを�
 
 - **パラメータ**
   
-  - crop=&lt;bool&gt;
-
+  - crop=&lt;bool&gt;  
     RPUのactive area offsetsを0に設定する (レターボックスなしの意味)。
 
 - 使用例
@@ -1136,20 +1139,20 @@ Vshipライブラリを使用してSSIMULACRA2スコアを算出する(GPU加速
 ### --vship-butteraugli [&lt;param1&gt;=&lt;value1&gt;[,&lt;param2&gt;=&lt;value2&gt;]...]
 Vshipライブラリを使用してButteraugliスコアを算出する(GPU加速)。
  - **パラメータ**
-   - Qnorm=&lt;int&gt; (デフォルト: 2)
+   - Qnorm=&lt;int&gt; (デフォルト: 2)  
      Butteraugli距離の正規化パラメータ。
-   - intensity_multiplier=&lt;float&gt; (デフォルト: 80.0)
+   - intensity_multiplier=&lt;float&gt; (デフォルト: 80.0)  
      計算の強度乗数。
 
 ### --vship-cvvdp [&lt;param1&gt;=&lt;value1&gt;[,&lt;param2&gt;=&lt;value2&gt;]...]
 Vshipライブラリを使用してCVVDP(Compressed Video Visual Difference Predictor)スコアを算出する(GPU加速)。
 フレーム間の時間的依存性を考慮した品質メトリクス。
  - **パラメータ**
-   - model=&lt;string&gt; (デフォルト: standard_4k)
+   - model=&lt;string&gt; (デフォルト: standard_4k)  
      ディスプレイモデルキー (例: "standard_4k", "standard_fhd")。
-   - model_config_json=&lt;string&gt;
+   - model_config_json=&lt;string&gt;  
      カスタム表示設定JSONファイルのパス。
-   - resize=&lt;bool&gt; (デフォルト: false)
+   - resize=&lt;bool&gt; (デフォルト: false)  
      モデルで定義されたディスプレイ解像度にフレームをリサイズする。
 
 ## 入出力 / 音声 / 字幕などのオプション
@@ -1505,7 +1508,6 @@ mono, stereo, 2.1, 3.0, 3.0(back), 3.1, 4.0, quad, quad(side), 5.0, 5.1, 6.0, 6.
 - **ファイルのパラメータ**
   - format=&lt;string&gt;  
     入力ファイルのフォーマットを指定する。
-
   - input_opt=&lt;string&gt;  
     入力ファイル用のオプションを指定する。
 
@@ -1637,7 +1639,6 @@ nero形式、apple形式、matroska形式に対応する。--chapter-copyとは�
 - **ファイルのパラメータ**
   - format=&lt;string&gt;  
     入力ファイルのフォーマットを指定する。
-
   - input_opt=&lt;string&gt;  
     入力ファイル用のオプションを指定する。
 
@@ -1888,8 +1889,11 @@ vppフィルタの適用順は固定で、コマンドラインの順序によ�
 - [--vpp-overlay](#--vpp-overlay-param1value1param2value2)
 - [--vpp-ngx-truehdr](#--vpp-ngx-truehdr-param1value1param2value2)
 - [--vpp-fruc](#--vpp-overlay-param1value1param2value2)
+- [--vpp-anime4k-shader](#--vpp-anime4k-shader-param1value1param2value2)
+- [--vpp-onnx](#--vpp-onnx-param1value1param2value2)
+- [--vpp-onnx-model-dir](#--vpp-onnx-model-dir-string)
 
-### --vpp-colorspace [&lt;param1&gt;=&lt;value1&gt;][,&lt;param2&gt;=&lt;value2&gt;],...  
+### --vpp-colorspace [&lt;param1&gt;=&lt;value1&gt;][,&lt;param2&gt;=&lt;value2&gt;],...
 色空間変換を行う。x64版のみ使用可能。  
 パラメータに"input"を指定すると、入力ファイルの値を参照できる。(avhww/avsw読み込みのみ)
 
@@ -2007,34 +2011,24 @@ vppフィルタの適用順は固定で、コマンドラインの順序によ�
 
   - src_max=&lt;float&gt;  
     入力の最大輝度 (nits)。(デフォルト: 自動、可能なら入力ファイルから情報を取得、できない場合は 1000.0 (HDR) / 203.0 (SDR))
-
   - src_min=&lt;float&gt;  
     入力の最小輝度 (nits)。(デフォルト: 自動、可能なら入力ファイルから情報を取得、できない場合は 0.005 (HDR) / 0.2023 (SDR))
-
   - dst_max=&lt;float&gt;  
     出力の最大輝度 (nits)。(デフォルト: 自動、可能ならパラメータから情報を取得、できない場合は 1000.0 (HDR) / 203.0 (SDR))
-
   - dst_min=&lt;float&gt;  
     出力の最小輝度 (nits)。(デフォルト: 自動、可能ならパラメータから情報を取得、できない場合は 0.005 (HDR) / 0.2023 (SDR))
-
   - dynamic_peak_detection=&lt;bool&gt;  
     HDRトーンマッピングの品質を最適化するための統計の計算を有効にします。デフォルト: true
-
   - smooth_period=&lt;float&gt;  
     スムージング係数。デフォルト: 20.0
-
   - scene_threshold_low=&lt;float&gt;  
     シーン変更検出の下限閾値 (dB)。デフォルト: 1.0
-
   - scene_threshold_high=&lt;float&gt;  
     シーン変更検出の上限閾値 (dB)。デフォルト: 3.0
-
   - percentile=&lt;float&gt;  
     輝度ヒストグラムの考慮するパーセンタイル。デフォルト: 99.995
-
   - black_cutoff=&lt;float&gt;  
     黒レベルのカットオフ強度 (PQ%)。デフォルト: 1.0
-
   - gamut_mapping=&lt;string&gt;  
     ガンママッピングモード。 (デフォルト: perceptual)
     ```
@@ -2092,7 +2086,6 @@ vppフィルタの適用順は固定で、コマンドラインの順序によ�
 
     - exposure=&lt;float&gt;   (0.0 - 10.0, デフォルト: 1.0)  
       適用される線形露出/ゲイン。
-
   - metadata=&lt;int&gt;  
     トーンマッピングに使用するデータソース。
     ```
@@ -2101,22 +2094,16 @@ vppフィルタの適用順は固定で、コマンドラインの順序によ�
 
   - contrast_recovery=&lt;float&gt;  
     コントラスト回復強度。デフォルト: 0.3
-
   - contrast_smoothness=&lt;float&gt;  
     コントラスト回復のローパスカーネルサイズ。デフォルト: 3.5
-
   - inverse_tone_mapping=&lt;bool&gt;  
     Inverse tone mapping. デフォルト: false
-
   - visualize_lut=&lt;bool&gt;  
     トーンマッピングカーブ/LUTを可視化します。デフォルト: false
-
   - show_clipping=&lt;bool&gt;  
     クリップされたピクセルを可視化します。デフォルト: false
-
   - use_dovi=&lt;bool&gt;  
     Dolby Vision RPUをST2086メタデータとして使用するかどうか。デフォルト: auto (Dolby Visionからトーンマッピングする場合に有効)
-
   - dst_pl_transfer=&lt;string&gt;  
     出力の転送関数。```dst_pl_colorprim```と一緒に使用する必要があります。
     ```
@@ -2269,7 +2256,6 @@ rff=1の場合のみの対応。(rff > 1には対応しない) また、[--trim]
     | Lv3 | 動き検出二重化 | 前のフレームと比較をして、動き(色の変化)があった部分だけ縞の平均化を行う。 <br>解除Lv2だと平均化されてしまう静止した横縞模様を保存できる。<br>静止したテロップの細かい文字や、アニメなどの枠線付きの静止画の 輪郭をつぶしたくない場合に使用する。| 
     | Lv4 | 動き検出補間 | 前のフレームと比較をして動きがあった部分は、片方のフィールドを潰して残す方のフィールドの画像で補間する。<br>残像はなくなりますが、この解除がかかった部分は縦の解像度が半分になる。 |
     | Lv5 | 斜め線補正補間 | **非対応** |
-
   - shift=&lt;bool&gt;        (フィールドシフト)  
     フィールドシフトを行う。
   
@@ -2279,7 +2265,7 @@ rff=1の場合のみの対応。(rff > 1には対応しない) また、[--trim]
     一方、raw出力する場合には、タイムコード反映されないので、vpp-afsのオプションにtimecode=trueを追加してタイムコードを別途出力し、あとからtimecodeファイルを含めてmuxする必要がある。
   
   - smooth=&lt;bool&gt;       (スムージング)  
-  - 24fps=&lt;bool&gt;        (24fps化)   
+  - 24fps=&lt;bool&gt;        (24fps化)  
     24fps化を強制する、映画・アニメ用のオプション。フィールドシフトと間引きをonにする必要がある。
   
   - tune=&lt;bool&gt;         (調整モード)  
@@ -2376,30 +2362,23 @@ nnediによるインタレ解除を行う。
 
 - **パラメータ**
 
-  - field=&lt;string&gt;
+  - field=&lt;string&gt;  
     対象フィールド。`bob`, `auto`(デフォルト), `top`, `bottom`, `bob_tff`, `bob_bff`。
-
-  - nsize=&lt;string&gt;
+  - nsize=&lt;string&gt;  
     NN近傍サイズ。`8x6`, `16x6`, `32x6`, `48x6`, `8x4`, `16x4`, `32x4`(デフォルト)。
-
-  - nns=&lt;int&gt;
+  - nns=&lt;int&gt;  
     ニューロン数。`16`, `32`(デフォルト), `64`, `128`, `256`。
-
-  - quality=&lt;string&gt;
+  - quality=&lt;string&gt;  
     品質。`fast`(デフォルト) または `slow`。
-
   - prescreen=&lt;int&gt;
     `2/3/4` をサポート。`0/1` は未対応。デフォルト: `2`。
 
-  - errortype=&lt;string&gt;
+  - errortype=&lt;string&gt;  
     誤差種別。`abs`(デフォルト) または `square`。
-
-  - clamp=&lt;int&gt;
+  - clamp=&lt;int&gt;  
     クリップ範囲モード。`0-4`。デフォルト: `1`。
-
-  - double_height=&lt;bool&gt;
+  - double_height=&lt;bool&gt;  
     高さ2倍出力。`field=auto/top/bottom` でのみ有効。デフォルト: `off`。
-
   - weightfile=&lt;path&gt;
     `nnedi3_weights.bin` のパス。省略時はWindowsビルドでは `nnedi3_weights.bin` を検索し、Linuxビルドでは組み込みウェイトを使用する。
 
@@ -2419,7 +2398,6 @@ nnediによるインタレ解除を行う。
   - preset=&lt;string&gt;
     `slower`, `slow`, `medium`, `fast`, `faster`(デフォルト), `veryfast`, `superfast`, `ultrafast`, `draft`。
     原則としてオリジナルの値を踏襲。
-
   - tuning=&lt;string&gt;
     `none`(デフォルト), `dv-sd`, `dv-hd`。
 
@@ -2447,11 +2425,10 @@ nnediによるインタレ解除を行う。
   - edi/match_edi=&lt;string&gt;
     `bob`, `yadif`, `cyadif`, `repyadif`, `repcyadif`, `nnedi3`, `passthrough`。
     ただし `source_match>0` 時の `match_edi` は `bob/yadif/cyadif/repyadif/repcyadif/nnedi3` のみ。
-
   - tr0/rep0-thin/rep0-pad/search_refine
     `tr0=-1..2`、`rep0-thin=0-7`、`rep0-pad=0-3`、`search_refine=0-3`。
 
-  - mv_spatial_refine=&lt;int|auto&gt;
+  - mv_spatial_refine=&lt;int|auto&gt;  
     モーションベクトルの spatial refine 回数。動きベクトル探索は複数の解像度（解析レベル）を粗→細の順に進む階層構造を取るが、本オプションは各レベルで「**近傍ブロックの動きベクトルを参照してさらに精度を上げる**」spatial refine パスを何回実行するかを指定する。
     デフォルトは `auto` (`-1`) で、**もっとも解像度の低い最上位レベル（ブロック数が最も少ない階層）でのみ spatial refine を行い、それ以降の下位レベルでは行わない**。ブロック数の少ない階層に spatial 情報による精度向上を集中させ、ブロック数の多い下位階層では GPU の並列性を最大限に活用するための既定戦略。
     `0` は spatial refine を全レベルで無効化、`1` は全レベルで1回、`2` は全レベルで2回、以降同様。
@@ -2541,35 +2518,27 @@ nnediによるインタレ解除を行う。
 
   - mode=&lt;string&gt;  
     出力モード。`vfr` (デフォルト), `60`, `24`。
-
   - preset=&lt;string&gt;  
     内部プリセット。`slower`, `slow`, `medium`, `fast`, `faster`(デフォルト), `veryfast`, `superfast`, `ultrafast`, `draft`。
-
   - timing=&lt;string&gt;  
     タイミング解析モード。`realtime`, `realtime+` (デフォルト), `strict`。
-
   - past_cycles=&lt;int&gt;  
     `realtime+` のcommit delay cycle数。デフォルト: 30。
 
   - thswitch=&lt;float&gt;  
     60p切替threshold。デフォルト: 0.5。
-
   - ucf=&lt;bool&gt;  
     UCF段を有効化。デフォルト: off。
-
   - nr=&lt;bool&gt;  
     最終出力に `vpp-degrain` を適用。デフォルト: off。
-
   - is120=&lt;bool&gt;  
     120fps duration補正用の予約フラグ。デフォルト: on。
-
   - debug=&lt;bool&gt;  
     `timecode` 指定時に `.result.dat` / `.frameinfo.tsv` dumpを出力する。デフォルト: off。
 
   - debug_stage=&lt;string&gt;  
     `none`, `switch-flag`(`switch-flag-min`), `contains-combe`, `combe-mask`(`combe-mask-min`)。
     24p系デバッグ表示に使用。
-
   - timecode=&lt;path&gt;  
     timecode v2 dump path。`mode=24/vfr` では `*.duration.txt` も併せて出力する。
 
@@ -2613,11 +2582,9 @@ bwdifによるインタレ解除を行う。
       トップフィールド優先として処理する。
     - bff
       ボトムフィールド優先として処理する。
-
-  - deint=&lt;all|interlaced&gt;
+  - deint=&lt;all|interlaced&gt;  
     インタレ解除する対象フレーム。デフォルト: all。`interlaced` ではプログレッシブ判定フレームをそのまま通す。
-
-  - thr=&lt;float&gt;
+  - thr=&lt;float&gt;  
     動き判定の閾値。デフォルト 0.0 (0.0 - 100.0)。
 
 ### --vpp-decomb [&lt;param1&gt;=&lt;value1&gt;][,&lt;param2&gt;=&lt;value2&gt;],...  
@@ -2627,14 +2594,11 @@ decombによるインタレ解除を行う。
   
   - full=&lt;bool&gt;  
     すべてのフレームをインタレ解除する。 デフォルト: on。
-
   - threshold=&lt;int&gt;  
     フレームがインタレ解除が必要か判定する際の閾値。デフォルト 20 (0 - 255)。
-
-  - dthreshold=&lt;int&gt;
+  - dthreshold=&lt;int&gt;  
     縞検出の閾値。デフォルト 7 (0 - 255)。
-
-  - blend=&lt;bool&gt;   
+  - blend=&lt;bool&gt;  
     補間の代わりにブレンドする。デフォルト: off。
 
 
@@ -2642,7 +2606,7 @@ decombによるインタレ解除を行う。
 ソフトテレシネ/ハードテレシネ向けの inverse telecine を行います。
 
 - **パラメータ**
-  - guide=&lt;int&gt;  (デフォルト: 1)
+  - guide=&lt;int&gt;  (デフォルト: 1)  
     マッチングモード。
     - 0
       C/P/N の中から match-quality 最小の候補を選択。
@@ -2650,61 +2614,44 @@ decombによるインタレ解除を行う。
       C が十分クリーンなら C を優先し、そうでなければ P/N から選択。
     - 2
       PAL 2:2 向けモード。
-
-  - post=&lt;int&gt;  (デフォルト: 2)
+  - post=&lt;int&gt;  (デフォルト: 2)  
     コーミングが残った場合の後処理。
     - 0
       後処理なし。
     - 2
       combed と判定されたピクセルのみ adaptive blend を行う。
-
-  - cycle=&lt;auto|int&gt;  (デフォルト: auto)
+  - cycle=&lt;auto|int&gt;  (デフォルト: auto)  
     デシメーション周期。`auto` は入力 fps が 26 以上のときのみ 3:2 decimation を有効化する。
-
-  - drop=&lt;int&gt;  (デフォルト: 1)
+  - drop=&lt;int&gt;  (デフォルト: 1)  
     1サイクルあたりにドロップするフレーム数。現状は `1` のみ対応。
-
-  - combthresh=&lt;float&gt;  (デフォルト: 0.12)
+  - combthresh=&lt;float&gt;  (デフォルト: 0.12)  
     画素単位の combing 判定閾値。`0.0 - 1.0`。
-
-  - cleanfrac=&lt;float&gt;  (デフォルト: 0.20)
+  - cleanfrac=&lt;float&gt;  (デフォルト: 0.20)  
     C を clean とみなすために許容する combed 画素の割合。
-
-  - dthresh=&lt;int&gt;  (デフォルト: 7)
+  - dthresh=&lt;int&gt;  (デフォルト: 7)  
     per-pixel deinterlace gate。`0 - 255`。`0` で無効。
-
-  - chroma=&lt;bool&gt;
+  - chroma=&lt;bool&gt;  
     U/V 面も match-quality に含める。
-
-  - back=&lt;int&gt;
+  - back=&lt;int&gt;  
     P マッチを試す条件。`0` = 常に試す、`1` = C が combed のときのみ試す。
-
   - y0=&lt;int&gt;
-  - y1=&lt;int&gt;
+  - y1=&lt;int&gt;  
     combing metric から除外する帯域を指定する。字幕焼き込みの回避用。
-
-  - cadlock=&lt;auto|on|off&gt;
+  - cadlock=&lt;auto|on|off&gt;  
     cadence pattern lock を有効化する。`auto` は `guide>=1` で有効。
-
-  - gthresh=&lt;int&gt;
+  - gthresh=&lt;int&gt;  
     cadence-predicted match override の許容割合。`0 - 100`。`0` で override 無効。
-
-  - vthresh=&lt;int&gt;
+  - vthresh=&lt;int&gt;  
     post-assembly combing veto threshold。`0 - 256`。`0` で無効。
-
-  - expand=&lt;auto|on|off&gt;
+  - expand=&lt;auto|on|off&gt;  
     DGDecode 互換の RFF expansion。`auto` は `guide>=1` かつ soft-telecine 検出時に有効。
-
-  - mixed=&lt;bool&gt;
+  - mixed=&lt;bool&gt;  
     RFF/progressive 区間と本物のインタレース区間が混在する入力向けの混合モード。`--avsw` または `--avhw` 入力が必要。
-
-  - hysteresis=&lt;float&gt;
+  - hysteresis=&lt;float&gt;  
     隣接フレーム間で match 種別が切り替わることへの抑制量。`0.0 - 1.0`。
-
-  - tff=&lt;auto|on|off&gt;
+  - tff=&lt;auto|on|off&gt;  
     フィールド順。`auto` では入力 `picstruct` から決定する。
-
-  - log=&lt;path|bool&gt;
+  - log=&lt;path|bool&gt;  
     フレームごとのマッチ結果ログを出力する。
 
 ### --vpp-decimate [&lt;param1&gt;=&lt;value1&gt;][,&lt;param2&gt;=&lt;value2&gt;],...  
@@ -2713,16 +2660,12 @@ decombによるインタレ解除を行う。
 - **パラメータ**
   - cycle=&lt;int&gt;  (デフォルト: 5)  
     ドロップするフレームの周期。ここで設定したフレーム数の中から指定フレーム数をドロップする。
-
   - drop=&lt;int&gt;  (デフォルト: 1)  
     cycle内にドロップするフレーム数。ここで設定したフレーム数の中から1枚フレームをドロップする。
-
   - thredup=&lt;float&gt;  (デフォルト: 1.1,  0.0 - 100.0)  
     重複と判定する閾値。
-
   - thresc=&lt;float&gt;   (デフォルト: 15.0,  0.0 - 100.0)  
     シーンチェンジと判定する閾値。
-
   - blockx=&lt;int&gt;  
   - blocky=&lt;int&gt;  
     重複判定の計算を行うブロックサイズ。デフォルト: 32。 
@@ -2742,12 +2685,10 @@ decombによるインタレ解除を行う。
 - **パラメータ**
   - hi=&lt;int&gt;  (デフォルト: 768)  
     ドロップ対象とするかどうかの閾値。各8x8ブロックの中の差分の総和が、ひとつでもこの閾値を上回っていれば、ドロップ対象から外す。
-
   - lo=&lt;int&gt;  (デフォルト: 320)  
   - frac=&lt;float&gt;  (デフォルト: 0.33)  
     ドロップ対象とするかどうかの閾値。各8x8ブロックの中の差分の総和について、閾値"lo"を上回っているブロックの数をカウントし、
     それが全体のブロック数に占める割合が"frac"以上であればドロップ対象から外す。
-
   - max=&lt;int&gt;  (デフォルト: 0)  
     正の値での指定: 連続ドロップフレーム数の上限。  
     負の値での指定: 間引く1フレームを決めるフレーム間隔の下限。
@@ -2865,7 +2806,7 @@ decombによるインタレ解除を行う。
   - quality=&lt;int&gt;  (default=3, 1-6)  
     処理の品質。値が大きいほど高精度だが遅くなる。
   
-  - qp=&lt;int&gt;  (default=12, 1 - 63)   
+  - qp=&lt;int&gt;  (default=12, 1 - 63)  
     フィルタの強さ。値が大きいほど強さが増すが、輪郭がぼける等の副作用も強くなる。
     
   - prec (デフォルト: auto)  
@@ -2889,13 +2830,11 @@ decombによるインタレ解除を行う。
   - strength=&lt;int&gt;  (default=3, 0 - 20)  
     スムージングの強さ（反復回数）。
   
-  - threshold=&lt;float&gt;  (default=15.0, 0.0 - 255.0)
+  - threshold=&lt;float&gt;  (default=15.0, 0.0 - 255.0)  
     エッジ判定の閾値。
-
-  - threshold_c=&lt;float&gt;  (default=-1.0, -1.0 / 0.0 - 255.0)
+  - threshold_c=&lt;float&gt;  (default=-1.0, -1.0 / 0.0 - 255.0)  
     色差成分のエッジ検出の閾値。-1.0 の場合は threshold と同じ値を使用。
-
-  - highq=&lt;bool&gt;  (default=true)
+  - highq=&lt;bool&gt;  (default=true)  
     高品質モード。エッジ検出点を増やす。
   
   - mask=&lt;bool&gt;  (default=false)  
@@ -2918,7 +2857,7 @@ decombによるインタレ解除を行う。
     - 4
     - 8 (fast)
   
-  - sigma=&lt;float&gt;  (default=4.0)    
+  - sigma=&lt;float&gt;  (default=4.0)  
     フィルタの強さ。値が大きいほど強さが増すが、輪郭がぼける等の副作用も強くなる。
     
   - block_size=&lt;int&gt;  (default=8)  
@@ -2933,7 +2872,7 @@ decombによるインタレ解除を行う。
   - sigma=&lt;float&gt;  
     フィルタ強度。 (default=1.0, 0.0 - 100.0)
   
-  - amount=&lt;float&gt;  (default=1.0, 0.0 - 1.0)    
+  - amount=&lt;float&gt;  (default=1.0, 0.0 - 1.0)  
     ノイズ除去量。
     
   - block_size=&lt;int&gt;  (default=32)  
@@ -2943,7 +2882,7 @@ decombによるインタレ解除を行う。
     - 32
     - 64
 
-  - overlap=&lt;float&gt;  (default=0.5, 0.2 - 0.8)    
+  - overlap=&lt;float&gt;  (default=0.5, 0.2 - 0.8)  
     FFTブロック同士のオーバーラップサイズ。アーティファクト発生を防ぐため、0.5以上が推奨。
   
   - method=&lt;int&gt; (default = 0)
@@ -2962,25 +2901,25 @@ decombによるインタレ解除を行う。
 動き補償つき degrain デバッグフィルタ。
 
 - **パラメータ**
-  - preset=&lt;string&gt;
+  - preset=&lt;string&gt;  
     surface preset。`custom` (デフォルト), `auto`。原則としてオリジナルの値を踏襲。
-  - mode=&lt;string&gt;
+  - mode=&lt;string&gt;  
     出力モード。`source`, `analyze`, `compb`, `compf`, `compb2`, `compf2`, `degrain` (デフォルト), `mv`, `sad`。
-  - stage=&lt;string&gt;
+  - stage=&lt;string&gt;  
     Step2 stage marker。`auto` (デフォルト), `tr1`, `tr2`。
-  - tr=&lt;int&gt;
+  - tr=&lt;int&gt;  
     Auto preset temporal radius。`1` または `2`。`mode=degrain`, `stage`, `delta` を設定する。
-  - blksize/search/overlap/delta/levels/pel
+  - blksize/search/overlap/delta/levels/pel  
     ブロックマッチングの形状と時間方向参照半径。
-  - thsad/thsadc/thscd1/thscd2
+  - thsad/thsadc/thscd1/thscd2  
     degrain とシーンチェンジの閾値。
-  - tr0/rep0/search_refine
+  - tr0/rep0/search_refine  
     search reference prefilter パラメータ。
-  - searchparam/pelsearch/truemotion/lambda/lsad/pnew/plevel/globalmotion/dct/useflag
+  - searchparam/pelsearch/truemotion/lambda/lsad/pnew/plevel/globalmotion/dct/useflag  
     モーション探索の調整パラメータ。
-  - mv_spatial_refine=&lt;int|auto&gt;
+  - mv_spatial_refine=&lt;int|auto&gt;  
     モーションベクトルの spatial refine 回数。デフォルトは `auto` (`-1`) で、もっとも解像度の低い最上位レベルでのみ近傍ブロック参照による refine を行い、下位（高解像度）レベルでは行わない。
-  - chroma/binomial/tv_range
+  - chroma/binomial/tv_range  
     色差解析、prefilter、レンジ制御。
 
 - **注意**
@@ -2998,7 +2937,7 @@ decombによるインタレ解除を行う。
   - radius=&lt;int&gt;  (default=3, 1-5)  
     適用半径。値が大きいほど効果が強くなる一方、処理が重くなる。
   
-  - strength=&lt;float&gt;  (default=0.08, 0.0 - 1.0)    
+  - strength=&lt;float&gt;  (default=0.08, 0.0 - 1.0)  
     フィルタの強さ。値が大きいほど効果が強くなる。
   
   - lerp=&lt;float&gt;  (default=0.2, 0.0 - 1.0)  
@@ -3017,24 +2956,21 @@ decombによるインタレ解除を行う。
 Non local meansを用いたノイズ除去フィルタ。Windowsでは64bit版のみに対応。
 
 - **パラメータ**
-  - sigma=&lt;float&gt;  (default=0.005, 0.0 -)   
+  - sigma=&lt;float&gt;  (default=0.005, 0.0 -)  
     ノイズの分散。 より大きな値にするとより強くノイズ除去を行う。
   
-  - h=&lt;float&gt;  (default=0.05, 0.0 <)   
+  - h=&lt;float&gt;  (default=0.05, 0.0 <)  
     パラメータ。 値を大きくすると重みがより均一になる。
   
   - patch=&lt;int&gt;  (default=5, 3 - 21)  
     パッチのサイズ。奇数で指定。
   
-  - search=&lt;int&gt;  (default=11, 3 - 21)
+  - search=&lt;int&gt;  (default=11, 3 - 21)  
     探索範囲。奇数で指定。
-
-  - d=&lt;int&gt;  (default=0, 0 - 5)
+  - d=&lt;int&gt;  (default=0, 0 - 5)  
     時間方向の参照半径。`0` では従来の空間方向のみのNLMeansを使用する。
-
-  - search_t=&lt;int&gt;  (default=11, 3 - 21)
+  - search_t=&lt;int&gt;  (default=11, 3 - 21)  
     時間方向参照フレームでの探索範囲。奇数で指定。
-
   - fp16=&lt;string&gt;  (default=blockdiff)
     - none  
       fp16を使用せず、fp32を使用する。高精度だが遅い。
@@ -3077,16 +3013,13 @@ Non local meansを用いたノイズ除去フィルタ。Windowsでは64bit版�
 HQDN3D による空間・時間方向のノイズ除去を行う。CUDA 実装では中間バッファに FP32 を使用する。
 
 - **パラメータ**
-  - luma_spatial=&lt;float&gt;  (default=4.0, 0-255)
+  - luma_spatial=&lt;float&gt;  (default=4.0, 0-255)  
     輝度の空間方向ノイズ除去の強さ。
-
-  - chroma_spatial=&lt;float&gt;  (default=3.0, 0-255)
+  - chroma_spatial=&lt;float&gt;  (default=3.0, 0-255)  
     色差の空間方向ノイズ除去の強さ。
-
-  - luma_temporal=&lt;float&gt;  (default=6.0, 0-255)
+  - luma_temporal=&lt;float&gt;  (default=6.0, 0-255)  
     輝度の時間方向ノイズ除去の強さ。
-
-  - chroma_temporal=&lt;float&gt;  (default=4.5, 0-255)
+  - chroma_temporal=&lt;float&gt;  (default=4.5, 0-255)  
     色差の時間方向ノイズ除去の強さ。
 
 - 使用例
@@ -3098,22 +3031,19 @@ HQDN3D による空間・時間方向のノイズ除去を行う。CUDA 実装�
 既知のアップスケールカーネルを逆算し、元の低解像度に近い画像へ縮小します。
 
 - **パラメータ**
-  - kernel=&lt;string&gt;
+  - kernel=&lt;string&gt;  
     逆算するアップスケールカーネル。デフォルトは bicubic。
     ```
     bilinear, bicubic, spline16, spline36, spline64, lanczos2, lanczos3, lanczos4, auto
     ```
 
-  - width=&lt;int&gt; / height=&lt;int&gt;
+  - width=&lt;int&gt; / height=&lt;int&gt;  
     出力する元解像度。明示カーネルでは両方を指定します。
-
-  - b=&lt;float&gt;, c=&lt;float&gt;
+  - b=&lt;float&gt;, c=&lt;float&gt;  
     bicubic のパラメータ。デフォルトは b=0.0, c=0.5。
-
-  - src_left=&lt;float&gt;, src_top=&lt;float&gt;
+  - src_left=&lt;float&gt;, src_top=&lt;float&gt;  
     入力画像のサブピクセルオフセット。デフォルトは 0.0。
-
-  - border_handling=&lt;string&gt;
+  - border_handling=&lt;string&gt;  
     端処理。デフォルトは mirror。
     ```
     mirror, zero, repeat
@@ -3125,10 +3055,9 @@ HQDN3D による空間・時間方向のノイズ除去を行う。CUDA 実装�
   - search_min=&lt;int&gt;, search_max=&lt;int&gt;, search_step=&lt;int&gt;
     `auto=true` 時の探索範囲と細かさ。`search_step` のデフォルトは 1。
 
-  - detect_frames=&lt;int&gt;
+  - detect_frames=&lt;int&gt;  
     自動検出で平均化するフレーム数。デフォルトは 10。
-
-  - show_scores=&lt;bool&gt;
+  - show_scores=&lt;bool&gt;  
     自動検出時の候補スコアをログに出力します。デフォルトは false。
 
 - 使用例
@@ -3209,11 +3138,9 @@ nppc64_11.dll, nppif64_11.dll, nppig64_11.dllをNVEncC64と同じフォルダに
 - **パラメータ**
     - shader=&lt;string&gt;  
       対象のshaderファイルのパス。(glslファイル)
-
-    - res=&lt;int&gt;x&lt;int&gt;
+    - res=&lt;int&gt;x&lt;int&gt;  
       フィルタの出力解像度。
-
-    - csp=&lt;string&gt;
+    - csp=&lt;string&gt;  
       libplaceboに渡す入力CSPを指定。
       `yuv444` (デフォルト) では従来通り4:4:4へ変換してから処理し、
       `yuv420` では4:2:0入力時のアップサンプリングをスキップしてlibplacebo側でクロマ処理を行う。
@@ -3221,7 +3148,7 @@ nppc64_11.dll, nppif64_11.dll, nppig64_11.dllをNVEncC64と同じフォルダに
       yuv444, yuv420
       ```
 
-    - colorsystem=&lt;string&gt;
+    - colorsystem=&lt;string&gt;  
       使用する色空間を指定。デフォルトでは入力ファイルから自動的に設定される。
       ```
       unknown, bt601, bt709, smpte240m, bt2020nc, bt2020c, bt2100pq, bt2100hlg, dolbyvision, ycgco, rgb, xyz
@@ -3250,22 +3177,17 @@ nppc64_11.dll, nppif64_11.dll, nppig64_11.dllをNVEncC64と同じフォルダに
 
     - radius=&lt;float&gt;  
       拡大縮小アルゴリズムの半径。vpp-resizeの表で "resizable" にチェックが入っているもののみ有効。 (0.0 - 16.0、デフォルト = 自動)
-
     - clamp=&lt;float&gt;  
       負の重みに対するクランプ係数。1.0にすると負の重みが0になります。(0.0 -   1.    0、デフォルト = 0.0)
-
     - taper=&lt;float&gt;  
      重み関数の中心部分を平坦化します。(0.0 - 1.0、デフォルト = 0.0)
-
     - blur=&lt;float&gt;  
       追加のぼかし係数。(0.0 - 100.0、デフォルト = 0.0)
-
     - antiring=&lt;float&gt;  
       アンチリンギング強度。(0.0 - 1.0、デフォルト = 0.0)
     
     - linear=&lt;bool&gt;  
       処理前に画像を線形化してスケーリングを行います。(デフォルト = false)
-
     - sigmoid=&lt;bool&gt;  
       スケーリング時に sigmoidization を有効化します。(デフォルト = false)
       `linear=true` が必要で、主にアップスケーリング経路で有効です。
@@ -3273,7 +3195,6 @@ nppc64_11.dll, nppif64_11.dll, nppig64_11.dllをNVEncC64と同じフォルダに
     - sigmoid_center=&lt;float&gt;  
       sigmoid の中心値を指定します。(0.0 - 1.0)
       未指定時は libplacebo の既定値 (0.75) を使用します。
-
     - sigmoid_slope=&lt;float&gt;  
       sigmoid の傾きを指定します。(1.0 - 20.0)
       未指定時は libplacebo の既定値 (6.5) を使用します。
@@ -3304,12 +3225,35 @@ nppc64_11.dll, nppif64_11.dll, nppig64_11.dllをNVEncC64と同じフォルダに
       | lanczos2      | 4x4 lanczos補間                            |
       | lanczos3      | 6x6 lanczos補間                            |
       | lanczos4      | 8x8 lanczos補間                            |
+      | lanczos5      | 10x10 lanczos補間                           |
+      | lanczos6      | 12x12 lanczos補間                           |
+      | lanczos7      | 14x14 lanczos補間                           |
+      | lanczos8      | 16x16 lanczos補間                           |
+      | mitchell      | Mitchell-Netravali補間                      |
+      | catmull-rom   | Catmull-Rom補間                             |
+      | hermite       | Hermite補間                                 |
+      | jinc36        | EWA Jinc補間 (radius=3)                     |
+      | jinc64        | EWA Jinc補間 (radius=4)                     |
+      | jinc144       | EWA Jinc補間 (radius=6)                     |
+      | jinc256       | EWA Jinc補間 (radius=8)                     |
+      | nis           | NVIDIA Image Scaling 1.0.3                  |
       | fsr1          | AMD FidelityFX Super Resolution 1.0 (EASU + RCAS) |
 
       - fsr1 の追加パラメータ
 
-        - sharpness=&lt;float&gt;
+        - sharpness=&lt;float&gt;  
           RCASのシャープネス。(0.0 - 1.0、デフォルト = 0.5)
+
+      - nis / bicubic の追加パラメータ
+
+        - sharpness=&lt;float&gt;  
+          nis のシャープネス。(0.0 - 1.0、デフォルト = 0.5)
+        - cascade=&lt;string&gt;  
+          nis の2倍超拡大時のカスケード設定。auto, on, off。
+        - hdr=&lt;string&gt;  
+          nis のシャープ化帯域。auto, sdr, pq。
+        - b=&lt;float&gt;, c=&lt;float&gt;  
+          bicubic の Mitchell-Netravali B/C 係数。(デフォルト B=0.0, C=0.6)
 
     - nppライブラリのリサイズフィルタ
  
@@ -3336,12 +3280,12 @@ nppc64_11.dll, nppif64_11.dll, nppig64_11.dllをNVEncC64と同じフォルダに
       2160p までの入力解像度に対応している。
       
       - 追加パラメータ
-        - superres-mode=&lt;int&gt;
+        - superres-mode=&lt;int&gt;  
           nvvfx-superres のモードの選択。
           - 0 ... 弱め
           - 1 ... 強め (default)
       
-        - superres-strength=&lt;float&gt;
+        - superres-strength=&lt;float&gt;  
           nvvfx-superresの強さの指定。 (0.0 - 1.0, デフォルト = 0.4)
 
     - [NGX](https://docs.nvidia.com/rtx/ngx/programming-guide/index.html)ライブラリのリサイズフィルタ
@@ -3353,7 +3297,7 @@ nppc64_11.dll, nppif64_11.dll, nppig64_11.dllをNVEncC64と同じフォルダに
       | ngx-vsr       | NVIDIA VSR (Video Super Resolution)  |  |
 
       - 追加パラメータ
-        - vsr-quality=&lt;int&gt;
+        - vsr-quality=&lt;int&gt;  
           ngx-vsr使用時の品質の設定。 (デフォルト=1, 1 - 4)
           数字が大きいほど高品質。
 
@@ -3392,24 +3336,19 @@ nppc64_11.dll, nppif64_11.dll, nppig64_11.dllをNVEncC64と同じフォルダに
 
       - 追加パラメータ
 
-        - pl-radius=&lt;float&gt;
-
+        - pl-radius=&lt;float&gt;  
           libplacebo-resampleで使用される拡大縮小アルゴリズムの半径。表で "resizable" にチェックが入っているもののみ有効。 (0.0 - 16.0、デフォルト = 自動)
       
-        - pl-clamp=&lt;float&gt;
-
+        - pl-clamp=&lt;float&gt;  
           libplacebo-resampleで使用される負の重みに対するクランプ係数。1.0にすると負の重みが0になります。(0.0 -   1.    0、デフォルト = 0.0)
       
-        - pl-taper=&lt;float&gt;
-
+        - pl-taper=&lt;float&gt;  
           libplacebo-resampleの重み関数の中心部分を平坦化します。(0.0 - 1.0、デフォルト = 0.0)
       
-        - pl-blur=&lt;float&gt;
-
+        - pl-blur=&lt;float&gt;  
           libplacebo-resampleの追加のぼかし係数。(0.0 - 100.0、デフォルト = 0.0)
       
-        - pl-antiring=&lt;float&gt;
-
+        - pl-antiring=&lt;float&gt;  
           libplacebo-resampleのアンチリンギング強度。(0.0 - 1.0、デフォルト = 0.0)
 
 - **使用例**
@@ -3431,6 +3370,12 @@ nppc64_11.dll, nppif64_11.dll, nppig64_11.dllをNVEncC64と同じフォルダに
 
   例: fsr1を使用する
   --vpp-resize algo=fsr1,sharpness=0.8
+
+  例: nisを使用する
+  --vpp-resize algo=nis,sharpness=0.5,cascade=auto,hdr=sdr
+
+  例: jinc144を使用する
+  --vpp-resize algo=jinc144
   ```
 
 ### --vpp-unsharp [&lt;param1&gt;=&lt;value1&gt;][,&lt;param2&gt;=&lt;value2&gt;],...
@@ -3456,22 +3401,17 @@ unsharpフィルタ。輪郭・ディテール強調用のフィルタ。
 インタレ解除後に残った縞状の残留を軽減するフィルタ。
 
 - **パラメータ**
-  - mode=&lt;vinverse|vinverse2&gt; (default=vinverse)
+  - mode=&lt;vinverse|vinverse2&gt; (default=vinverse)  
     フィルタの動作モード。
-
-  - sstr=&lt;float&gt; (default=2.7, 0.0 - 8.0)
+  - sstr=&lt;float&gt; (default=2.7, 0.0 - 8.0)  
     contra reference の強度。
-
-  - amnt=&lt;float&gt; (default=255.0, 0.0 - 255.0)
+  - amnt=&lt;float&gt; (default=255.0, 0.0 - 255.0)  
     8bit スケールでの画素ごとの最大変化量。255.0 で制限なし。
-
-  - scl=&lt;float&gt; (default=0.25, 0.0 - 4.0)
+  - scl=&lt;float&gt; (default=0.25, 0.0 - 4.0)  
     残留と参照差分の符号が逆の場合のソフトクリップ係数。
-
-  - thr=&lt;float&gt; (default=0.0, 0.0 - 255.0)
+  - thr=&lt;float&gt; (default=0.0, 0.0 - 255.0)  
     8bit スケールでの残留判定閾値。これ未満の画素は変更しない。
-
-  - chroma=&lt;bool&gt; (default=true)
+  - chroma=&lt;bool&gt; (default=true)  
     色差プレーンにも処理を適用する。
 
 - 使用例
@@ -3484,22 +3424,17 @@ unsharpフィルタ。輪郭・ディテール強調用のフィルタ。
 色差プレーンをシフトし、輝度と色差の位置ずれを補正するフィルタ。
 
 - **パラメータ**
-  - x=&lt;float&gt; (default=0.0, -4.0 - 4.0)
+  - x=&lt;float&gt; (default=0.0, -4.0 - 4.0)  
     横方向のシフト量。輝度画素単位で指定する。
-
-  - y=&lt;float&gt; (default=0.0, -4.0 - 4.0)
+  - y=&lt;float&gt; (default=0.0, -4.0 - 4.0)  
     縦方向のシフト量。輝度画素単位で指定する。
-
-  - show=&lt;normal|laplacian&gt; (default=normal)
+  - show=&lt;normal|laplacian&gt; (default=normal)  
     laplacian 診断画像を出力する。
-
-  - auto=&lt;bool&gt; (default=false)
+  - auto=&lt;bool&gt; (default=false)  
     冒頭フレームからシフト量を自動検出する。
-
-  - auto_frames=&lt;int&gt; (default=5, 1-100)
+  - auto_frames=&lt;int&gt; (default=5, 1-100)  
     自動検出で採用する解析フレーム数。
-
-  - auto_min_pairs=&lt;int&gt; (default=200, 10-10000)
+  - auto_min_pairs=&lt;int&gt; (default=200, 10-10000)  
     解析フレームあたりに必要なゼロクロス対応点数。
 
 - 使用例
@@ -3513,16 +3448,13 @@ unsharpフィルタ。輪郭・ディテール強調用のフィルタ。
 H.264の非強フィルタ相当の空間デブロックフィルタ。エンコーダの `--no-deblock` とは異なり、入力画像に対するVPPフィルタとして動作する。
 
 - **パラメータ**
-  - qp=&lt;int&gt; (default=24, 0-51)
+  - qp=&lt;int&gt; (default=24, 0-51)  
     フィルタ強度のQP。
-
-  - alpha=&lt;int&gt; (default=0, -6 - 6)
+  - alpha=&lt;int&gt; (default=0, -6 - 6)  
     alphaオフセット。
-
-  - beta=&lt;int&gt; (default=0, -6 - 6)
+  - beta=&lt;int&gt; (default=0, -6 - 6)  
     betaオフセット。
-
-  - chroma=&lt;bool&gt; (default=false)
+  - chroma=&lt;bool&gt; (default=false)  
     planar色差プレーンにも適用する。NV12/P010などのsemi-planar色差では無効化される。
 
 - 使用例
@@ -3535,22 +3467,17 @@ H.264の非強フィルタ相当の空間デブロックフィルタ。エンコ
 フレーム間の輝度ゆらぎを統計的に補正する時間方向フィルタ。
 
 - **パラメータ**
-  - strength=&lt;float&gt; (default=1.0, 0.0-1.0)
+  - strength=&lt;float&gt; (default=1.0, 0.0-1.0)  
     補正結果の合成強度。
-
-  - damping=&lt;float&gt; (default=0.8, 0.0-1.0)
+  - damping=&lt;float&gt; (default=0.8, 0.0-1.0)  
     前フレームの補正量を使った時間方向の減衰。
-
-  - scene_threshold=&lt;float&gt; (default=2.0, 0.5-5.0)
+  - scene_threshold=&lt;float&gt; (default=2.0, 0.5-5.0)  
     シーンチェンジ判定のしきい値。判定されたフレームは補正せず通過する。
-
-  - frames=&lt;int&gt; (default=30, 5-300)
+  - frames=&lt;int&gt; (default=30, 5-300)  
     参照統計に使用するローリングフレーム数。
-
-  - predictor=&lt;bool&gt; (default=true)
+  - predictor=&lt;bool&gt; (default=true)  
     predictor-corrector による2段補正を使用する。
-
-  - chroma=&lt;bool&gt; (default=false)
+  - chroma=&lt;bool&gt; (default=false)  
     色差プレーンにも補正を適用する。
 
 - 使用例
@@ -3563,19 +3490,15 @@ H.264の非強フィルタ相当の空間デブロックフィルタ。エンコ
 CUDAによる手ぶれ補正フィルタ。輝度成分から位相相関でフレーム間の平行移動を推定し、フレームをワープして補正する。
 
 - **パラメータ**
-  - strength=&lt;float&gt; (default=1.0, 0.0 - 1.0)
+  - strength=&lt;float&gt; (default=1.0, 0.0 - 1.0)  
     補正の強さ。
-
-  - damping=&lt;float&gt; (default=0.9, 0.0 - 1.0)
+  - damping=&lt;float&gt; (default=0.9, 0.0 - 1.0)  
     補正量の平滑化の強さ。
-
-  - trust=&lt;float&gt; (default=0.3, 0.0 - 1.0)
+  - trust=&lt;float&gt; (default=0.3, 0.0 - 1.0)  
     位相相関ピークの信頼度しきい値。
-
-  - max_shift=&lt;float&gt; (default=32.0, 1 - 256)
+  - max_shift=&lt;float&gt; (default=32.0, 1 - 256)  
     補正する最大移動量のピクセル数。
-
-  - border=&lt;string&gt; (default=black)
+  - border=&lt;string&gt; (default=black)  
     境界処理。black, clamp, mirror から選択。
 
 - 使用例
@@ -3588,28 +3511,21 @@ CUDAによる手ぶれ補正フィルタ。輝度成分から位相相関でフ�
 色かぶりやホワイトバランスを補正するフィルタ。
 
 - **パラメータ**
-  - mode=&lt;manual|auto|gray&gt; (default=manual)
+  - mode=&lt;manual|auto|gray&gt; (default=manual)  
     補正モード。
-
-  - space=&lt;auto|rgb|yuv&gt; (default=auto)
+  - space=&lt;auto|rgb|yuv&gt; (default=auto)  
     処理する色空間。
-
-  - matrix=&lt;auto|bt601|bt709|bt2020&gt; (default=auto)
+  - matrix=&lt;auto|bt601|bt709|bt2020&gt; (default=auto)  
     YUV/RGB変換に使用する行列。
-
-  - white=&lt;rrggbb&gt; (default=ffffff)
+  - white=&lt;rrggbb&gt; (default=ffffff)  
     manualモードで使用する白点。
-
-  - black=&lt;rrggbb&gt; (default=000000)
+  - black=&lt;rrggbb&gt; (default=000000)  
     manualモードで使用する黒点。
-
-  - frames=&lt;int&gt; (default=30, 10-5000)
+  - frames=&lt;int&gt; (default=30, 10-5000)  
     auto/grayモードの解析フレーム数。
-
-  - strength=&lt;float&gt; (default=1.0, 0.0-1.0)
+  - strength=&lt;float&gt; (default=1.0, 0.0-1.0)  
     auto/grayモードの補正強度。
-
-  - variance_threshold=&lt;float&gt; (default=2.0, >0)
+  - variance_threshold=&lt;float&gt; (default=2.0, >0)  
     フラッシュ・フェード除外用の分散しきい値。
 
 - 使用例
@@ -3623,25 +3539,19 @@ CUDAによる手ぶれ補正フィルタ。輝度成分から位相相関でフ�
 ハロー除去フィルタ。輝度成分に補正を適用し、色差成分は元のままコピーする。
 
 - **パラメータ**
-  - rx=&lt;float&gt; (default=2.0, 0.5 - 10.0)
+  - rx=&lt;float&gt; (default=2.0, 0.5 - 10.0)  
     水平方向のハロー半径。
-
-  - ry=&lt;float&gt; (default=2.0, 0.5 - 10.0)
+  - ry=&lt;float&gt; (default=2.0, 0.5 - 10.0)  
     垂直方向のハロー半径。
-
-  - darkstr=&lt;float&gt; (default=1.0, 0.0 - 1.0)
+  - darkstr=&lt;float&gt; (default=1.0, 0.0 - 1.0)  
     明るいハローを暗く補正する強度。
-
-  - brightstr=&lt;float&gt; (default=0.0, 0.0 - 1.0)
+  - brightstr=&lt;float&gt; (default=0.0, 0.0 - 1.0)  
     暗いハローを明るく補正する強度。
-
-  - lowsens=&lt;int&gt; (default=50, 0 - 100)
+  - lowsens=&lt;int&gt; (default=50, 0 - 100)  
     感度ランプの下限。
-
-  - highsens=&lt;int&gt; (default=50, 0 - 100)
+  - highsens=&lt;int&gt; (default=50, 0 - 100)  
     感度ランプの上限。
-
-  - ss=&lt;float&gt; (default=1.5, 1.0 - 4.0)
+  - ss=&lt;float&gt; (default=1.5, 1.0 - 4.0)  
     スーパーサンプリング倍率。
 
 - 使用例
@@ -3657,22 +3567,17 @@ CUDAによる手ぶれ補正フィルタ。輝度成分から位相相関でフ�
   - rx, ry, darkstr, brightstr, lowsens, highsens, ss
     `--vpp-dehalo` と同じ。
 
-  - thmi=&lt;int&gt; (default=80, 0 - 255)
+  - thmi=&lt;int&gt; (default=80, 0 - 255)  
     エッジマスクの下限しきい値。
-
-  - thma=&lt;int&gt; (default=128, 0 - 255)
+  - thma=&lt;int&gt; (default=128, 0 - 255)  
     エッジマスクの上限しきい値。
-
-  - thlimi=&lt;int&gt; (default=50, 0 - 255)
+  - thlimi=&lt;int&gt; (default=50, 0 - 255)  
     補正制限マスクの下限しきい値。
-
-  - thlima=&lt;int&gt; (default=100, 0 - 255)
+  - thlima=&lt;int&gt; (default=100, 0 - 255)  
     補正制限マスクの上限しきい値。
-
-  - showmask=&lt;int&gt; (default=0, 0 - 4)
+  - showmask=&lt;int&gt; (default=0, 0 - 4)  
     デバッグ用マスク出力。
-
-  - edge=&lt;string&gt; (default=prewitt)
+  - edge=&lt;string&gt; (default=prewitt)  
     エッジ検出方式。prewitt, sobel, scharr, kirsch, laplacian から選択。
 
 - 使用例
@@ -3685,22 +3590,17 @@ CUDAによる手ぶれ補正フィルタ。輝度成分から位相相関でフ�
 DCTリンギング低減フィルタ。輝度成分に補正を適用し、色差成分は元のままコピーする。
 
 - **パラメータ**
-  - mrad=&lt;int&gt; (default=1, 1 - 3)
+  - mrad=&lt;int&gt; (default=1, 1 - 3)  
     リングマスクの拡張半径。
-
-  - mthr=&lt;int&gt; (default=10, 0 - 255)
+  - mthr=&lt;int&gt; (default=10, 0 - 255)  
     エッジマスクのしきい値。
-
-  - sigma=&lt;float&gt; (default=1.5, 0.5 - 5.0)
+  - sigma=&lt;float&gt; (default=1.5, 0.5 - 5.0)  
     ガウスぼかしの sigma。
-
-  - showmask=&lt;bool&gt; (default=false)
+  - showmask=&lt;bool&gt; (default=false)  
     有効マスクのみを出力する。
-
-  - protect=&lt;bool&gt; (default=true)
+  - protect=&lt;bool&gt; (default=true)  
     元のエッジ画素を保護する。
-
-  - edge=&lt;string&gt; (default=log)
+  - edge=&lt;string&gt; (default=log)  
     エッジ検出方式。log, sobel, prewitt, scharr, kirsch, laplacian から選択。
 
 - 使用例
@@ -3743,14 +3643,11 @@ DCTリンギング低減フィルタ。輝度成分に補正を適用し、色�
   
   - threshold=&lt;float&gt;  (default=15.0, 0.0 - 255.0)  
     エッジ判定の閾値。
-
-  - slope=&lt;float&gt; (default=0.0, 0.0 -)
+  - slope=&lt;float&gt; (default=0.0, 0.0 -)  
     シグモイドによるソフトマスクの傾き。0.0では従来の二値マスクを使用する。
-
-  - luma_limit=&lt;float&gt; (default=0.0, 0.0 - 255.0)
+  - luma_limit=&lt;float&gt; (default=0.0, 0.0 - 255.0)  
     指定値より暗い輝度領域でシャープ化を弱める。0.0では無効。
-
-  - block_protect=&lt;float&gt; (default=0.0, 0.0 - 1.0)
+  - block_protect=&lt;float&gt; (default=0.0, 0.0 - 1.0)  
     検出されたDCTブロック境界付近でシャープ化を弱める。0.0では無効。
   
   - highq=&lt;bool&gt;  (default=true)  
@@ -3771,10 +3668,9 @@ DCTリンギング低減フィルタ。輝度成分に補正を適用し、色�
 輝度のみを処理するContrast Adaptive Sharpeningフィルタ。CASを輝度に適用し、色差はそのままコピーする。
 
 - **パラメータ**
-  - sharpness=&lt;float&gt; (default=0.4, 0.0 - 1.0)
+  - sharpness=&lt;float&gt; (default=0.4, 0.0 - 1.0)  
     シャープニングの強度。内部ではCASのpeak値に変換される。
-
-  - hdr=&lt;bool&gt; (default=false)
+  - hdr=&lt;bool&gt; (default=false)  
     SDR向けのgamma 2.0輝度近似をスキップする。PQやHLGなどのHDR素材で有効にする。
 
 - 使用例
@@ -3793,22 +3689,17 @@ DCTリンギング低減フィルタ。輝度成分に補正を適用し、色�
 微細なディテールを強調するシャープニングフィルタ。大きな輪郭への強調を抑えつつ、テクスチャや低振幅成分を持ち上げる。
 
 - **パラメータ**
-  - z=&lt;float&gt;  (default=4.0, 0.001 - 64.0)
+  - z=&lt;float&gt;  (default=4.0, 0.001 - 64.0)  
     ゼロ点。値を大きくすると、小さな輝度差をより弱く扱う。
-
-  - sstr=&lt;float&gt;  (default=1.5, 0.0 - 16.0)
+  - sstr=&lt;float&gt;  (default=1.5, 0.0 - 16.0)  
     強調の強さ。値を大きくするとディテールがより強く持ち上がる。
-
-  - power=&lt;float&gt;  (default=4.0, 1.0 - 16.0)
+  - power=&lt;float&gt;  (default=4.0, 1.0 - 16.0)  
     非線形強調の指数。値を大きくすると中程度の振幅のディテールをより優先する。
-
-  - ldmp=&lt;float&gt;  (default=1.0, 0.0 - 1000.0)
+  - ldmp=&lt;float&gt;  (default=1.0, 0.0 - 1000.0)  
     低振幅成分の抑制。値を大きくするとノイズに近い小さな変化をより抑える。
-
-  - mode=&lt;int&gt;  (default=1, 0 - 1)
+  - mode=&lt;int&gt;  (default=1, 0 - 1)  
     blur の種類。0 で 3x3 Gauss、1 で 3x3 Box。
-
-  - med=&lt;bool&gt;  (default=false)
+  - med=&lt;bool&gt;  (default=false)  
     blur に 3x3 median を追加適用する。
 
 - 使用例
@@ -3842,16 +3733,13 @@ DCTリンギング低減フィルタ。輝度成分に補正を適用し、色�
     - 0 ... 輝度ベースの輪郭検出を色差成分にも適用する。
     - 1 ... 各色差成分についてそれぞれ輪郭検出を行う。
 
-  - depth_min=&lt;float&gt;  (default=depthと同じ, -128.0 - 128.0)
+  - depth_min=&lt;float&gt;  (default=depthと同じ, -128.0 - 128.0)  
     輪郭マスクが弱い画素に適用するwarp深度。強い輪郭ほど弱めたい場合は `depth_max` より大きい値も指定できる。
-
-  - depth_max=&lt;float&gt;  (default=depthと同じ, -128.0 - 128.0)
+  - depth_max=&lt;float&gt;  (default=depthと同じ, -128.0 - 128.0)  
     輪郭マスクが強い画素に適用するwarp深度。
-
-  - edge_thr=&lt;float&gt;  (default=192.0, 1.0 - 255.0)
+  - edge_thr=&lt;float&gt;  (default=192.0, 1.0 - 255.0)  
     adaptive depth が `depth_max` に到達する輪郭マスク値。8bit基準で指定する。
-
-  - gamma=&lt;float&gt;  (default=1.0, 0.01 - 8.0)
+  - gamma=&lt;float&gt;  (default=1.0, 0.01 - 8.0)  
     adaptive depth の応答カーブ。1.0未満では弱い輪郭への効果が強まり、1.0より大きいと強い輪郭中心に効果がかかる。
   
 - 使用例
@@ -3867,28 +3755,21 @@ DCTリンギング低減フィルタ。輝度成分に補正を適用し、色�
 アニメ・セル画調の映像向けの masked anti-aliasing を行う。方向別9コストのAAとエッジマスクを組み合わせ、非エッジ部分を壊さずに斜め線のジャギーを低減する。
 
 - **パラメータ**
-  - ss=&lt;float&gt; (デフォルト=2.0, 1.0 - 4.0)
+  - ss=&lt;float&gt; (デフォルト=2.0, 1.0 - 4.0)  
     スーパーサンプリング倍率。
-
-  - aa=&lt;int&gt; (デフォルト=48, 0 - 255)
+  - aa=&lt;int&gt; (デフォルト=48, 0 - 255)  
     輝度のAA強度。
-
-  - aac=&lt;int&gt; (デフォルト=aa-8, 0 - 255)
+  - aac=&lt;int&gt; (デフォルト=aa-8, 0 - 255)  
     色差のAA強度。chroma=on のときのみ使用する。
-
-  - mask=&lt;bool&gt; (デフォルト=on)
+  - mask=&lt;bool&gt; (デフォルト=on)  
     エッジマスクを有効にする。
-
-  - mthresh=&lt;int&gt; (デフォルト=7, 1 - 255)
+  - mthresh=&lt;int&gt; (デフォルト=7, 1 - 255)  
     エッジ判定の閾値。値を大きくするとエッジとして扱うピクセルが少なくなる。
-
-  - chroma=&lt;bool&gt; (デフォルト=off)
+  - chroma=&lt;bool&gt; (デフォルト=off)  
     色差プレーンも処理する。おおよそ50-100%遅くなる。
-
-  - show=&lt;int&gt; (デフォルト=0)
+  - show=&lt;int&gt; (デフォルト=0)  
     デバッグ表示。0=通常、1=マスクのみ、2=マスク+AA。
-
-  - edge=&lt;string&gt; (デフォルト=sobel)
+  - edge=&lt;string&gt; (デフォルト=sobel)  
     エッジ検出方法。sobel, prewitt, sobel_full, scharr, kirsch, laplacian から選択する。
 
 - 使用例
@@ -3923,7 +3804,6 @@ DCTリンギング低減フィルタ。輝度成分に補正を適用し、色�
   
   - m=&lt;string&gt;  
     輝度調整用のカーブの指定。RGB処理後に、ポスト処理として実行される。
-
   - r=&lt;string&gt;  
     赤成分のカーブの指定。
   
@@ -3960,7 +3840,7 @@ DCTリンギング低減フィルタ。輝度成分に補正を適用し、色�
     - illusionshu
     - w3c
 
-  - skipblack=&lt;bool&gt; (default=false)
+  - skipblack=&lt;bool&gt; (default=false)  
     平均値計算から純黒画素を除外する。レターボックス等の暗部が多いソース向け。
 
 - 使用例
@@ -4064,19 +3944,14 @@ DCTリンギング低減フィルタ。輝度成分に補正を適用し、色�
 - **Parameters**
   - iterations=&lt;int&gt;  
     イテレーション数。 (default=1, 0-)
-
   - threshold=&lt;float&gt;  
     カットオフ閾値。 (default=4.0, 0-)
-
   - radius=&lt;float&gt;  
     半径 (default=16.0, 0-)
-
   - grain_y=&lt;float&gt;  
     輝度用の追加ノイズ。 (default=6.0, 0-)
-
   - grain_c=&lt;float&gt;  
     色差用の追加ノイズ。 (default=grain_y, 0-)
-
   - dither=&lt;string&gt;  
     ディザリングモード、8bitのみ。
     - none
@@ -4146,13 +4021,10 @@ Turing以降のGPUかつ、Windows x64版で550.58以降のドライバが必要
 - **パラメータ**
   - contrast=&lt;int&gt;  (デフォルト=125, 0 - 200)  
     明暗のコントラスト比の調整。
-
   - saturation=&lt;int&gt;  (デフォルト=75, 0 - 200)  
     色の濃さの調整。
-
   - middlegray=&lt;int&gt;  (デフォルト=44, 10 - 100)  
     平均の明るさの調整。
-
   - maxluminance=&lt;int&gt;  (デフォルト=1000, 400 - 2000)  
     最大輝度(nits)の指定。
 
@@ -4171,8 +4043,7 @@ Turing以降のGPUかつ、Windows x64版で550.58以降のドライバが必要
 - **パラメータ**
   - double
     フレームレートを倍にします。
-
-  - fps=&lt;int&gt;/&lt;int&gt;
+  - fps=&lt;int&gt;/&lt;int&gt;  
     フレームレートを指定の値に変換します。
 
 - 使用例
@@ -4183,6 +4054,294 @@ Turing以降のGPUかつ、Windows x64版で550.58以降のドライバが必要
   例: 59.94fpsに変換する場合
   --vpp-fruc fps=60000/1001
   ```
+
+### --vpp-anime4k-shader [&lt;param1&gt;=&lt;value1&gt;][,&lt;param2&gt;=&lt;value2&gt;],...
+bloc97 Anime4K v3.2ベースのCUDAフィルタによる輝度エンハンス / 2倍アップスケールチェーンを有効にする。現状は8bit YUV420入力のみ対応。
+CNNモデルは含まれておらず、そちらを使用する場合は、[`--vpp-onnx`](#--vpp-onnx-param1value1param2value2) を使用する。
+
+1パスで完結するチェーン: オプションのプリフィルタデノイズ -> メインAnime4Kモード -> オプションのライン強調/細線化/デノイズ -> オプションのハイライトクランプ・アンチリンギング -> クロマ処理 -> 最終リサイズ。
+
+- **パラメータ**
+  - mode=&lt;string&gt; (デフォルト: ani4k_original)  
+    Anime4Kバリアントの選択。
+    - ani4k_original ... エッジ強調2倍アップスケール (strength 0.5)
+    - ani4k_deblur ... エッジ強調2倍アップスケール、より強い (strength 1.0)
+    - ani4k_darken_hq ... ライン暗化2倍アップスケール
+    - ani4k_thin_hq ... ライン細線化2倍アップスケール
+    - ani4k_dog_sharpen ... 1倍 Difference-of-Gaussians シャープ化
+    - ani4k_dog ... 2倍 DoGアップスケール
+    - ani4k_dtd ... 2倍 暗化+細線化+デブラー複合アップスケール
+
+  - scale=&lt;int&gt; (デフォルト: 2)  
+    1 = ソース解像度で強調のみ、2 = 2倍アップスケール + 強調。
+    一部モードはscaleが暗黙的に決まる (dog_sharpen=1, dog/dtd=2)。
+  - strength=&lt;float&gt; (デフォルト: 0.50)  
+    強調の強度倍率。mode=ani4k_deblur で値未指定時は自動的に1.0に引き上げ。
+  - prefilter_denoise=&lt;string&gt; (デフォルト: off)  
+    メインパスの前にデノイズを適用。
+    off / mean / median / mode (bilateral)
+  - darken=&lt;string&gt; (デフォルト: off)  
+    メインパス後のライン暗化パス。
+    off / hq / fast / veryfast
+  - thin=&lt;string&gt; (デフォルト: off)  
+    メインパス後のライン細線化パス。
+    off / hq / fast / veryfast
+  - denoise=&lt;string&gt; (デフォルト: off)  
+    メインパス後のデノイズパス。
+    off / mean / median / mode (bilateral)
+  - denoise_intensity, denoise_spatial, denoise_curve, denoise_hist_reg=&lt;float&gt;  
+    デノイズパスの詳細パラメータ (上級者向け、省略可)。
+  - clamp_highlights=&lt;bool&gt; (デフォルト: false)  
+    出力ハイライトをソースのローカル最大値にクランプ。
+  - antiring=&lt;float&gt; (デフォルト: 0.0)  
+    アンチリンギング強度。各アップスケール輝度ピクセルをソース2x2のmin/maxにクランプする。
+  - chroma_resize=&lt;string&gt; (デフォルト: spline36)  
+    scale=2時のU/Vリサイズカーネル。
+    spline36 / bilinear / bicubic / lanczos3 / joint
+    joint = 輝度ガイド付きジョイントバイラテラルクロマ再構築。
+  - chroma=&lt;bool&gt; (デフォルト: true)  
+    scale=2時にクロマをリサイズするか。falseの場合パススルー。scale=1では常にパススルー。
+  - out_res=&lt;WxH&gt;  
+    Anime4K処理後の最終リサイズ。任意の最終サイズに合わせられる。
+    片方の軸に負の値を指定するとアスペクト比を保持 (例: out_res=-2x1080)。
+  - resize=&lt;string&gt; (デフォルト: lanczos4)  
+    out_resで使用するリサンプラー。
+
+- 使用例
+  ```
+  --vpp-anime4k-shader mode=ani4k_original,scale=2
+  --vpp-anime4k-shader mode=ani4k_deblur,antiring=0.8,chroma_resize=joint
+  --vpp-anime4k-shader mode=ani4k_dog_sharpen,strength=0.6,out_res=1920x1080
+  ```
+
+### --vpp-onnx [&lt;param1&gt;=&lt;value1&gt;][,&lt;param2&gt;=&lt;value2&gt;],...
+ONNX Runtime CUDA/TensorRT provider を使用してONNXモデルを実行するCNNフィルタ。CUDA 12対応のONNX Runtime GPU版が必要。
+
+#### Windows
+
+必要な ONNX Runtime / cuDNN / TensorRT 関連 DLL を下記リンク先にまとめてある。これをダウンロードし、7z を展開して中身のDLLを `NVEncC64.exe` と同じフォルダに配置する。
+
+- [nvenc_vpp_onnx_dlls_20260627.7z](https://github.com/rigaya/HWEnc-onnx-models/releases/download/20260627/nvenc_vpp_onnx_dlls_20260627.7z)
+
+`provider=cuda` のみ使用する場合も、上記の一式で動作する。`provider=tensorrt` を使用しない場合、TensorRT 関連 DLL は実行時には読み込まれない。
+
+<details>
+<summary>必要モジュール詳細</summary>
+
+手動でDLLを揃える場合は、下記のDLLが `PATH` から見えるか、`NVEncC64.exe` と同じフォルダに配置されている必要がある。
+
+```text
+NVEncC64.exe
+├─ onnxruntime.dll
+│  ├─ onnxruntime_providers_shared.dll
+│  ├─ onnxruntime_providers_cuda.dll
+│  │  ├─ cudart64_12.dll
+│  │  ├─ cublas64_12.dll
+│  │  ├─ cublasLt64_12.dll
+│  │  ├─ cufft64_11.dll
+│  │  └─ cudnn64_9.dll
+│  │     ├─ cudnn_adv64_9.dll
+│  │     ├─ cudnn_cnn64_9.dll
+│  │     ├─ cudnn_ext64_9.dll
+│  │     ├─ cudnn_graph64_9.dll
+│  │     │  ├─ cudnn_heuristic64_9.dll
+│  │     │  ├─ cudnn_engines_precompiled64_9.dll
+│  │     │  ├─ cudnn_engines_runtime_compiled64_9.dll
+│  │     │  └─ cudnn_engines_tensor_ir64_9.dll
+│  │     └─ cudnn_ops64_9.dll
+│  └─ onnxruntime_providers_tensorrt.dll (provider=tensorrt 使用時)
+│     ├─ nvinfer_10.dll
+│     │  └─ nvinfer_builder_resource_*.dll
+│     ├─ nvonnxparser_10.dll
+│     ├─ nvinfer_plugin_10.dll
+│     ├─ cudart64_12.dll
+│     ├─ cublas64_12.dll
+│     └─ cudnn64_9.dll
+```
+
+`provider=tensorrt` を使用する場合も、TensorRTで実行できないopのfallback用に CUDA provider を追加するため、CUDA provider 用DLL一式が必要。
+`nvinfer_builder_resource_*.dll` は TensorRT engine のビルド時に使用されるGPUアーキテクチャ別リソースDLLで、`*` の部分には `sm89` や `ptx` などが入る。`nvinfer_plugin_10.dll` はTensorRT pluginを使用するモデルで必要になるため、TensorRT対応の追加DLL群に含めることを推奨。
+`nvinfer_dispatch_10.dll`、`nvinfer_lean_10.dll`、`nvinfer_vc_plugin_10.dll` は ONNX Runtime TensorRT provider の通常実行では必須ではない。
+
+- ONNX Runtime: [ONNX Runtime Releases](https://github.com/microsoft/onnxruntime/releases) から CUDA 対応の Windows x64 GPU 版 (`onnxruntime-win-x64-gpu-*.zip`) をダウンロードする。例: `onnxruntime-win-x64-gpu-1.23.2.zip`
+- CUDA runtime / cuBLAS / cuFFT: [CUDA Toolkit Downloads](https://developer.nvidia.com/cuda-downloads) または [CUDA Toolkit Archive](https://developer.nvidia.com/cuda-toolkit-archive) から CUDA 12.x 版を導入する。
+- cuDNN: [cuDNN Downloads](https://developer.nvidia.com/cudnn-downloads) から CUDA 12.x 対応の cuDNN 9.x を導入する。
+- TensorRT (`provider=tensorrt` 使用時のみ): [TensorRT Downloads](https://developer.nvidia.com/tensorrt/download) から Windows x64 / CUDA 12.x 対応の TensorRT 10.x を導入する。ダウンロードには NVIDIA Developer へのログインとライセンス同意が必要な場合がある。
+
+</details>
+
+#### Linux
+
+必要な ONNX Runtime / cuDNN / TensorRT 関連モジュールは下記のように導入する。ONNX Runtime は GPU版を展開し、CUDA/cuDNN/TensorRT は NVIDIA の apt repository から導入する。
+
+```bash
+tar xf onnxruntime-linux-x64-gpu-*.tgz
+export LD_LIBRARY_PATH=/path/to/onnxruntime-linux-x64-gpu/lib:/usr/local/cuda/targets/x86_64-linux/lib:$LD_LIBRARY_PATH
+```
+
+CUDA 12.8 を使用する場合の例:
+
+```bash
+sudo apt-get install cuda-cudart-12-8 libcublas-12-8 libcufft-12-8 libcurand-12-8
+```
+
+cuDNN 9 / TensorRT 10 は、NVIDIA の local repository `.deb` を登録してから runtime ライブラリを導入する。
+
+```bash
+sudo dpkg -i cudnn-local-repo-ubuntu2404-9.x.y_1.0-1_amd64.deb
+sudo cp /var/cudnn-local-repo-ubuntu2404-9.x.y/cudnn-*-keyring.gpg /usr/share/keyrings/
+sudo apt-get update
+sudo apt-get install libcudnn9-cuda-12
+```
+
+```bash
+sudo dpkg -i nv-tensorrt-local-repo-ubuntu2404-10.x.x-cuda-12.x_1.0-1_amd64.deb
+sudo cp /var/nv-tensorrt-local-repo-ubuntu2404-10.x.x-cuda-12.x/*-keyring.gpg /usr/share/keyrings/
+sudo apt-get update
+sudo apt-get install libnvinfer10 libnvonnxparsers10
+```
+
+<details>
+<summary>必要モジュール詳細</summary>
+
+Linuxでは ONNX Runtime GPU版の `.so` を展開し、CUDA/cuDNN/TensorRT のruntimeライブラリをaptで導入する。ONNX Runtimeは展開した `lib` ディレクトリを `LD_LIBRARY_PATH` から見えるようにする。
+
+```text
+nvencc
+└─ libonnxruntime.so -> libonnxruntime.so.1 -> libonnxruntime.so.1.23.2
+   ├─ libonnxruntime_providers_shared.so
+   ├─ libonnxruntime_providers_cuda.so
+   │  ├─ libcudart.so.12           (cuda-cudart-12-8)
+   │  ├─ libcublas.so.12           (libcublas-12-8)
+   │  ├─ libcublasLt.so.12         (libcublas-12-8)
+   │  ├─ libcurand.so.10           (libcurand-12-8)
+   │  ├─ libcufft.so.11            (libcufft-12-8)
+   │  └─ libcudnn.so.9             (libcudnn9-cuda-12)
+   │     ├─ libcudnn_adv.so.9
+   │     ├─ libcudnn_cnn.so.9
+   │     ├─ libcudnn_ext.so.9
+   │     ├─ libcudnn_graph.so.9
+   │     ├─ libcudnn_heuristic.so.9
+   │     ├─ libcudnn_engines_precompiled.so.9
+   │     ├─ libcudnn_engines_runtime_compiled.so.9
+   │     ├─ libcudnn_engines_tensor_ir.so.9
+   │     └─ libcudnn_ops.so.9
+   └─ libonnxruntime_providers_tensorrt.so (provider=tensorrt 使用時)
+      ├─ libnvinfer.so.10          (libnvinfer10)
+      │  └─ libnvinfer_builder_resource_*.so.10
+      ├─ libnvonnxparser.so.10     (libnvonnxparsers10)
+      ├─ libcudart.so.12
+      ├─ libcublas.so.12
+      ├─ libcublasLt.so.12
+      └─ libcudnn.so.9
+```
+
+- ONNX Runtime: [ONNX Runtime Releases](https://github.com/microsoft/onnxruntime/releases) から CUDA 対応の Linux x64 GPU 版 (`onnxruntime-linux-x64-gpu-*.tgz`) をダウンロードし、任意の場所に展開する。
+- CUDA runtime / cuBLAS / cuFFT / cuRAND: [CUDA Toolkit Downloads](https://developer.nvidia.com/cuda-downloads) の NVIDIA CUDA apt repository を設定し、使用する CUDA 12.x に合わせたパッケージを導入する。CUDA 12.8 の例:
+
+```bash
+sudo apt-get install cuda-cudart-12-8 libcublas-12-8 libcufft-12-8 libcurand-12-8
+```
+
+- cuDNN: [cuDNN Downloads](https://developer.nvidia.com/cudnn-downloads) から Ubuntu / x86_64 / CUDA 12向けの cuDNN 9 local repository `.deb` を導入し、`libcudnn9-cuda-12` をインストールする。
+
+```bash
+sudo dpkg -i cudnn-local-repo-ubuntu2404-9.x.y_1.0-1_amd64.deb
+sudo cp /var/cudnn-local-repo-ubuntu2404-9.x.y/cudnn-*-keyring.gpg /usr/share/keyrings/
+sudo apt-get update
+sudo apt-get install libcudnn9-cuda-12
+```
+
+- TensorRT (`provider=tensorrt` 使用時のみ): [TensorRT Downloads](https://developer.nvidia.com/tensorrt/download) から Ubuntu / x86_64 / CUDA 12向けの TensorRT 10 local repository `.deb` を導入し、runtimeライブラリをインストールする。ダウンロードには NVIDIA Developer へのログインとライセンス同意が必要な場合がある。
+
+```bash
+sudo dpkg -i nv-tensorrt-local-repo-ubuntu2404-10.x.x-cuda-12.x_1.0-1_amd64.deb
+sudo cp /var/nv-tensorrt-local-repo-ubuntu2404-10.x.x-cuda-12.x/*-keyring.gpg /usr/share/keyrings/
+sudo apt-get update
+sudo apt-get install libnvinfer10 libnvonnxparsers10
+```
+
+`libcudnn*.so.9`、`libnvinfer*.so.10`、`libnvonnxparser.so.10` は通常 `/lib/x86_64-linux-gnu` に配置され、apt導入後は `ldconfig` により参照できる。CUDA系ライブラリが見つからない場合は、CUDAの `lib` ディレクトリも `LD_LIBRARY_PATH` に追加する。
+
+</details>
+
+モデルファイルは [https://github.com/rigaya/HWEnc-onnx-models/releases](https://github.com/rigaya/HWEnc-onnx-models/releases) からダウンロードできる。短縮モデル名 (`model=artcnn_c4f32` など) を使用する場合は、zipを展開したディレクトリを `--vpp-onnx-model-dir` で指定する。
+
+モデルのチャンネル数から前処理/後処理が自動推定される(1ch=輝度SR, 3ch=RGB, 4ch=RGB+ノイズ, 2ch=グレー+ノイズ, 3→2ch=クロマ)。
+
+- **パラメータ**
+  - model=&lt;string&gt;  
+    ONNXモデルファイルのパス (必須)。`--vpp-onnx-model-dir` 指定時は、models.json に登録されたモデル名を拡張子なしで指定可能。
+  - provider=&lt;string&gt; (デフォルト: auto)  
+    推論に使用する実行プロバイダ。auto / cuda / tensorrt (trt)
+  - colormatrix=&lt;string&gt; (デフォルト: auto)  
+    色行列。auto (SD=bt601, HD=bt709) / bt601 / bt709 / bt2020
+  - colorrange=&lt;string&gt; (デフォルト: auto)  
+    色域。auto (tv) / tv / pc
+  - colorspace=&lt;string&gt; (デフォルト: rgb)  
+    3chモデルの色空間。rgb / ycbcr (ArtCNN *_YCbCr 用)
+  - noise=&lt;int&gt; (デフォルト: 15, 範囲: 0 - 255)  
+    ノイズモデル用のノイズシグマ値。
+  - out_res=&lt;WxH&gt;  
+    モデル実行後の最終リサイズ。任意の最終サイズに合わせられる。
+    片方の軸に負の値を指定するとアスペクト比を保持 (例: out_res=-2x1080)。
+  - resize=&lt;string&gt; (デフォルト: lanczos4)  
+    out_resで使用するリサンプラー。
+
+  - list
+    models.json に登録されたモデル一覧を表示する。`--vpp-onnx-model-dir` の指定が必要。
+
+- **互換用パラメータ**
+  - device=&lt;string&gt;, interop=&lt;string&gt;  
+    QSVEnc/VCEEnc とのCLI互換のため受け付けるが、NVEnc では推論デバイスや転送方式の選択には使用しない。推論はエンコードに使用する CUDA デバイスに紐づき、host-readback 経路を使用する。
+
+- **使用可能なモデル名一覧**
+
+  models.json に登録済みのモデル名は model= で拡張子なしで指定可能 (例: `model=artcnn_c4f32`)。使用するには [`--vpp-onnx-model-dir`](#--vpp-onnx-model-dir-string) でモデルディレクトリを指定する必要がある。
+
+  | ファミリー | モデル名 |
+  |-----------|---------|
+  | ArtCNN | artcnn_c4f16, artcnn_c4f16_dn, artcnn_c4f16_ds, artcnn_c4f32, artcnn_c4f32_dn, artcnn_c4f32_ds, artcnn_r4f32, artcnn_r4f32_dn, artcnn_r8f64, artcnn_r8f64_chroma, artcnn_r8f64_chroma_dn, artcnn_r8f64_chroma_dn_int8_perf, artcnn_r8f64_chroma_int8_perf, artcnn_r8f64_int8_perf, artcnn_r8f64_jpeg420, artcnn_r8f64_jpeg420_ycbcr, artcnn_r8f64_jpeg444, artcnn_r8f64_jpeg444_ycbcr, artcnn_r8f64_rgb, artcnn_r16f96, artcnn_r16f96_int8_perf, artcnn_r16f128, artcnn_r16f128_int8, artcnn_r16f128_int8_perf |
+  | ACNet | acnet_s, acnet_s_box, acnet_s_box_hdn, acnet_s_hdn, acnet_m, acnet_m_box, acnet_m_box_hdn, acnet_m_hdn, acnet_l, acnet_l_box, acnet_l_box_hdn, acnet_l_hdn |
+  | ARNet | arnet_s, arnet_s_box, arnet_s_box_hdn, arnet_s_hdn, arnet_m, arnet_m_box, arnet_m_box_hdn, arnet_m_hdn, arnet_l, arnet_l_box, arnet_l_box_hdn, arnet_l_hdn, arnet_xl, arnet_xl_box, arnet_xl_box_hdn, arnet_xl_hdn |
+  | FSRCNNX | fsrcnnx_s, fsrcnnx_s_dp, fsrcnnx_m, fsrcnnx_m_dp |
+  | Anime3D | anime3d_aa_x2, anime3d_x2 |
+  | Anime4K Restore | anime4k_restore_cnn_l, anime4k_restore_cnn_soft_l, anime4k_restore_cnn_soft_ul, anime4k_restore_cnn_soft_vl, anime4k_restore_cnn_ul, anime4k_restore_cnn_vl |
+  | Anime4K Upscale CNN | anime4k_upscale_cnn_s, anime4k_upscale_cnn_s_dn, anime4k_upscale_cnn_m, anime4k_upscale_cnn_m_dn, anime4k_upscale_cnn_l, anime4k_upscale_cnn_l_dn, anime4k_upscale_cnn_ul, anime4k_upscale_cnn_ul_dn, anime4k_upscale_cnn_vl, anime4k_upscale_cnn_vl_dn |
+  | Anime4K GAN | anime4k_gan_s_x2, anime4k_gan_m_x2, anime4k_gan_l_x3, anime4k_gan_vl_x3, anime4k_gan_ul_x4, anime4k_gan_uul_x4 |
+  | WebSR | websr_cnn2x_s_rl, websr_cnn2x_s_an, websr_cnn2x_s_3d, websr_cnn2x_m_rl, websr_cnn2x_m_an, websr_cnn2x_m_3d, websr_cnn2x_l_rl, websr_cnn2x_l_an, websr_cnn2x_l_3d |
+  | waifu2x CUNet | waifu2x_cunet_scale2x, waifu2x_cunet_noise0, waifu2x_cunet_noise0_scale2x, waifu2x_cunet_noise1, waifu2x_cunet_noise1_scale2x, waifu2x_cunet_noise2, waifu2x_cunet_noise2_scale2x, waifu2x_cunet_noise3, waifu2x_cunet_noise3_scale2x |
+  | waifu2x UpConv7 | waifu2x_upconv7_art_scale2x, waifu2x_upconv7_art_noise0_scale2x, waifu2x_upconv7_art_noise1_scale2x, waifu2x_upconv7_art_noise2_scale2x, waifu2x_upconv7_art_noise3_scale2x, waifu2x_upconv7_photo_scale2x, waifu2x_upconv7_photo_noise0_scale2x, waifu2x_upconv7_photo_noise1_scale2x, waifu2x_upconv7_photo_noise2_scale2x, waifu2x_upconv7_photo_noise3_scale2x |
+  | waifu2x VGG7 | waifu2x_vgg7_art_scale2x, waifu2x_vgg7_art_noise0, waifu2x_vgg7_art_noise1, waifu2x_vgg7_art_noise2, waifu2x_vgg7_art_noise3, waifu2x_vgg7_art_y_scale2x, waifu2x_vgg7_art_y_noise1, waifu2x_vgg7_art_y_noise2, waifu2x_vgg7_art_y_noise3, waifu2x_vgg7_photo_scale2x, waifu2x_vgg7_photo_noise0, waifu2x_vgg7_photo_noise1, waifu2x_vgg7_photo_noise2, waifu2x_vgg7_photo_noise3, waifu2x_vgg7_ukbench_scale2x |
+  | Real-CUGAN | up2x_latest_no_denoise, up2x_latest_conservative, up2x_latest_denoise1x, up2x_latest_denoise2x, up2x_latest_denoise3x, up3x_latest_no_denoise, up3x_latest_conservative, up3x_latest_denoise3x, up4x_latest_no_denoise, up4x_latest_conservative, up4x_latest_denoise3x, upcunet2x_no_denoise, upcunet2x_no_denoise_int8, upcunet2x_no_denoise_int8_v2 |
+  | Real-ESRGAN | realesr_animevideov3, realesr_general_x4v3, realesr_general_wdn_x4v3, realesrgan_anime_6b, realesrgan_anime_6b_int8, realesrgan_anime_6b_int8_v3, realesrgan_x2plus, realesrgan_x4plus, realesrgan_x4plus_anime_6b, realesrnet_x4plus |
+  | BSRGAN | bsrgan, bsrganx2, bsrnet |
+  | RAVU | ravu_lite_r2, ravu_lite_r3, ravu_lite_r4, ravu_r2, ravu_r3, ravu_r4, ravu_3x_r2, ravu_3x_r3, ravu_3x_r4, ravu_zoom_2x_r2, ravu_zoom_2x_r2_ar, ravu_zoom_3x_r2, ravu_zoom_3x_r2_ar, ravu_zoom_4x_r2, ravu_zoom_4x_r2_ar, ravu_zoom_2x_r3, ravu_zoom_2x_r3_ar, ravu_zoom_3x_r3, ravu_zoom_3x_r3_ar, ravu_zoom_4x_r3, ravu_zoom_4x_r3_ar |
+  | EDSR | edsr_baseline_x2, edsr_baseline_x3, edsr_baseline_x4 |
+  | ESRGAN/FSSR/RealSR | esrgan, fssr_dped, fssr_jpeg, realsr_dped, realsr_jpeg |
+  | NNEDI3 | nnedi3_nns16_win8x4, nnedi3_nns16_win8x6, nnedi3_nns32_win8x4, nnedi3_nns32_win8x6, nnedi3_nns64_win8x4, nnedi3_nns64_win8x6, nnedi3_nns128_win8x4, nnedi3_nns128_win8x6, nnedi3_nns256_win8x4, nnedi3_nns256_win8x6 |
+  | KAIR Denoise | dncnn3, dncnn_15, dncnn_25, dncnn_50, dncnn_color_blind, dncnn_gray_blind, drunet_color, drunet_color_int8, drunet_gray, drunet_deblocking_color, drunet_deblocking_grayscale, fdncnn_color, fdncnn_color_clip, fdncnn_gray, fdncnn_gray_clip, ffdnet_color, ffdnet_color_clip, ffdnet_gray, ffdnet_gray_clip |
+  | KAIR SR | dpsr_x2, dpsr_x2_int8, dpsr_x3, dpsr_x4, dpsr_x4_gan, srmd_x2, srmd_x3, srmd_x4, srmdnf_x2, srmdnf_x3, srmdnf_x4 |
+
+- 使用例
+  ```
+  --vpp-onnx model=artcnn_c4f32
+  --vpp-onnx model=acnet/acnet_s.onnx,provider=cuda,out_res=1920x1080,resize=lanczos4
+  --vpp-onnx model=anime4k_restore_cnn_l,out_res=-2x1080
+  ```
+
+### --vpp-onnx-model-dir &lt;string&gt;
+登録済みONNXモデルのmodels.jsonおよびモデルファイルが格納されたディレクトリを指定する。
+
+`--vpp-onnx model=<モデル名>` で短縮名を使用する場合、または `--vpp-onnx list` で登録モデル一覧を表示する場合は、このオプションの指定が必要。
+
+モデルファイルは [https://github.com/rigaya/HWEnc-onnx-models/releases](https://github.com/rigaya/HWEnc-onnx-models/releases) からダウンロードできる。zipファイルを任意のディレクトリに展開し、そのディレクトリを指定する。
+
+このオプションはモデルファイルの場所のみを指定する。ONNX Runtime GPU版、CUDA runtime、cuDNN、TensorRTなどのDLLは、別途 `PATH` または `NVEncC64.exe` と同じフォルダから見えるようにする必要がある。
+
+```
+--vpp-onnx-model-dir C:\models\HWEnc-onnx-models
+```
 
 ### --vpp-perf-monitor
 各フィルタのパフォーマンス測定を行い、適用したフィルタの1フレームあたりの平均処理時間を最後に出力する。全体のエンコード速度がやや遅くなることがある点に注意。
@@ -4239,6 +4398,11 @@ NVIDIA MAXINE VideoEffects のモデルを格納しているフォルダの場�
   | 圧縮率低下        | 小さい                                    | ごくわずか                               |
   | 制約事項          | なし                                      | 多い (上述)                              |
   | メモリ使用量      | 通常と変わらず                            | かなり増加                               |
+
+### --parallel-force-large-memory-filters
+GPUメモリ使用量の大きいフィルタ使用時に、--parallel の並列数をGPU数以下に制限する処理を無効化する。
+
+GPUメモリ不足によるエラーや性能低下が起きやすくなるため、十分なGPUメモリがある場合のみ指定する。
 
 ### --cuda-schedule &lt;string&gt;
   主に、GPUのタスク終了を待機する際のCPUの挙動を決める。デフォルトはauto。
