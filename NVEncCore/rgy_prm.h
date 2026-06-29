@@ -107,6 +107,11 @@ static const int RGY_AUDIO_QUALITY_DEFAULT = 0;
 #define ENABLE_VPP_FILTER_LIBPLACEBO   (ENABLE_LIBPLACEBO && (ENCODER_QSV || ENCODER_NVENC || ENCODER_VCEENC || CLFILTERS_AUF))
 #define ENABLE_VPP_FILTER_FRUC         (                 ENCODER_NVENC)
 #define ENABLE_VPP_FILTER_DELOGO_MULTIADD  (             ENCODER_NVENC)
+#ifndef ENABLE_ONNXRUNTIME
+#define ENABLE_ONNXRUNTIME 0
+#endif
+#define ENABLE_VPP_FILTER_ONNX         (ENABLE_ONNXRUNTIME && ENCODER_NVENC)
+#define ENABLE_VPP_FILTER_ANIME4K       (                 ENCODER_NVENC)
 #define ENABLE_VPP_ORDER                   (CLFILTERS_AUF)
 
 #define ENABLE_PARALLEL_ENC            (ENCODER_QSV   || ENCODER_NVENC || ENCODER_VCEENC)
@@ -241,6 +246,9 @@ enum class VppType : int {
     CL_LIBPLACEBO_DEBAND,
 
     CL_FRUC,
+
+    CL_ONNX,
+    CL_ANIME4K,
 
     CL_PAD,
 
@@ -785,6 +793,18 @@ enum RGY_VPP_RESIZE_ALGO {
     RGY_VPP_RESIZE_LANCZOS3,
     RGY_VPP_RESIZE_LANCZOS4,
     RGY_VPP_RESIZE_FSR1,
+    RGY_VPP_RESIZE_LANCZOS5,
+    RGY_VPP_RESIZE_LANCZOS6,
+    RGY_VPP_RESIZE_LANCZOS7,
+    RGY_VPP_RESIZE_LANCZOS8,
+    RGY_VPP_RESIZE_MITCHELL,
+    RGY_VPP_RESIZE_CATMULL_ROM,
+    RGY_VPP_RESIZE_HERMITE,
+    RGY_VPP_RESIZE_JINC36,
+    RGY_VPP_RESIZE_JINC64,
+    RGY_VPP_RESIZE_JINC144,
+    RGY_VPP_RESIZE_JINC256,
+    RGY_VPP_RESIZE_NIS,
     RGY_VPP_RESIZE_OPENCL_CUDA_MAX,
 #if ENCODER_QSV
     RGY_VPP_RESIZE_MFX_NEAREST_NEIGHBOR,
@@ -956,6 +976,18 @@ const CX_DESC list_vpp_resize[] = {
     { _T("lanczos3"), RGY_VPP_RESIZE_LANCZOS3 },
     { _T("lanczos4"), RGY_VPP_RESIZE_LANCZOS4 },
     { _T("fsr1"),     RGY_VPP_RESIZE_FSR1 },
+    { _T("lanczos5"),    RGY_VPP_RESIZE_LANCZOS5 },
+    { _T("lanczos6"),    RGY_VPP_RESIZE_LANCZOS6 },
+    { _T("lanczos7"),    RGY_VPP_RESIZE_LANCZOS7 },
+    { _T("lanczos8"),    RGY_VPP_RESIZE_LANCZOS8 },
+    { _T("mitchell"),    RGY_VPP_RESIZE_MITCHELL },
+    { _T("catmull-rom"), RGY_VPP_RESIZE_CATMULL_ROM },
+    { _T("hermite"),     RGY_VPP_RESIZE_HERMITE },
+    { _T("jinc36"),      RGY_VPP_RESIZE_JINC36 },
+    { _T("jinc64"),      RGY_VPP_RESIZE_JINC64 },
+    { _T("jinc144"),     RGY_VPP_RESIZE_JINC144 },
+    { _T("jinc256"),     RGY_VPP_RESIZE_JINC256 },
+    { _T("nis"),         RGY_VPP_RESIZE_NIS },
 #if ENCODER_QSV
   #if !FOR_AUO
     { _T("bilinear"), RGY_VPP_RESIZE_MFX_BILINEAR },
@@ -1043,6 +1075,18 @@ const CX_DESC list_vpp_resize_help[] = {
     { _T("lanczos3"), RGY_VPP_RESIZE_LANCZOS3 },
     { _T("lanczos4"), RGY_VPP_RESIZE_LANCZOS4 },
     { _T("fsr1"),     RGY_VPP_RESIZE_FSR1 },
+    { _T("lanczos5"),    RGY_VPP_RESIZE_LANCZOS5 },
+    { _T("lanczos6"),    RGY_VPP_RESIZE_LANCZOS6 },
+    { _T("lanczos7"),    RGY_VPP_RESIZE_LANCZOS7 },
+    { _T("lanczos8"),    RGY_VPP_RESIZE_LANCZOS8 },
+    { _T("mitchell"),    RGY_VPP_RESIZE_MITCHELL },
+    { _T("catmull-rom"), RGY_VPP_RESIZE_CATMULL_ROM },
+    { _T("hermite"),     RGY_VPP_RESIZE_HERMITE },
+    { _T("jinc36"),      RGY_VPP_RESIZE_JINC36 },
+    { _T("jinc64"),      RGY_VPP_RESIZE_JINC64 },
+    { _T("jinc144"),     RGY_VPP_RESIZE_JINC144 },
+    { _T("jinc256"),     RGY_VPP_RESIZE_JINC256 },
+    { _T("nis"),         RGY_VPP_RESIZE_NIS },
 #if ENCODER_QSV
     { _T("bilinear"), RGY_VPP_RESIZE_MFX_BILINEAR },
     { _T("advanced"), RGY_VPP_RESIZE_MFX_ADVANCED },
@@ -1113,8 +1157,40 @@ const CX_DESC list_vpp_resize_help[] = {
     { NULL, 0 }
 };
 
+// --- NIS / tunable-bicubic resampler sub-options (for --vpp-resize) ---
+static const float FILTER_DEFAULT_RESIZE_NIS_SHARPNESS = 0.5f;
+enum RGY_NIS_CASCADE  { RGY_NIS_CASCADE_AUTO, RGY_NIS_CASCADE_ON, RGY_NIS_CASCADE_OFF };
+enum RGY_NIS_HDR_MODE { RGY_NIS_HDR_AUTO, RGY_NIS_HDR_SDR, RGY_NIS_HDR_PQ };
+static const int FILTER_DEFAULT_RESIZE_NIS_CASCADE = RGY_NIS_CASCADE_AUTO;
+static const int FILTER_DEFAULT_RESIZE_NIS_HDR     = RGY_NIS_HDR_AUTO;
+const CX_DESC list_vpp_resize_nis_cascade[] = {
+    { _T("auto"), RGY_NIS_CASCADE_AUTO }, { _T("on"), RGY_NIS_CASCADE_ON }, { _T("off"), RGY_NIS_CASCADE_OFF }, { NULL, 0 }
+};
+const CX_DESC list_vpp_resize_nis_hdr[] = {
+    { _T("auto"), RGY_NIS_HDR_AUTO }, { _T("sdr"), RGY_NIS_HDR_SDR }, { _T("pq"), RGY_NIS_HDR_PQ }, { NULL, 0 }
+};
+static const float FILTER_DEFAULT_RESIZE_BICUBIC_B = 0.0f;
+static const float FILTER_DEFAULT_RESIZE_BICUBIC_C = 0.6f;
+struct VppResizeBicubic {
+    float b;
+    float c;
+    VppResizeBicubic();
+    bool operator==(const VppResizeBicubic &x) const;
+    bool operator!=(const VppResizeBicubic &x) const;
+    tstring print() const;
+};
+struct VppResizeNis {
+    int   cascade;       // RGY_NIS_CASCADE_*
+    float sharpness;     // 0.0..1.0
+    int   hdrMode;       // RGY_NIS_HDR_*
+    VppResizeNis();
+    bool operator==(const VppResizeNis &x) const;
+    bool operator!=(const VppResizeNis &x) const;
+    tstring print() const;
+};
+
 static const char *paramsResizeLibPlacebo[] = { "algo", "pl-radius", "pl-clamp", "pl-taper", "pl-blur", "pl-antiring"/*, "pl-cplace"*/ };
-static const char *paramsResizeNVEnc[] = { "superres-mode", "superres-strength", "vsr-quality" };
+static const char *paramsResizeNVEnc[] = { "superres-mode", "superres-strength", "vsr-quality", "sharpness", "cascade", "hdr", "b", "c" };
 static const char *paramsResizeQSVEnc[] = { "superres-mode", "superres-algo" };
 static const char *paramsResizeFsr1[] = { "sharpness" };
 
@@ -3450,6 +3526,107 @@ enum class VppDeintCsp {
 
 extern const CX_DESC list_vpp_deint_csp[];
 
+static const int   FILTER_DEFAULT_ANIME4K_SCALE = 2;
+static const float FILTER_DEFAULT_ANIME4K_STRENGTH = 0.5f;
+
+enum class VppAnime4kMode {
+    Original = 0, Deblur = 1, DarkenHQ = 2, ThinHQ = 3,
+    DogSharpen = 7, Dog = 8, Dtd = 9,
+};
+enum class VppAnime4kChromaResize {
+    Spline36 = 0, Bilinear = 1, Bicubic = 2, Lanczos3 = 3, Joint = 4,
+};
+enum class VppAnime4kDarken  { Off = 0, HQ = 1, Fast = 2, VeryFast = 3, };
+enum class VppAnime4kThin    { Off = 0, HQ = 1, Fast = 2, VeryFast = 3, };
+enum class VppAnime4kDenoise { Off = 0, Mean = 1, Median = 2, Mode = 3, };
+
+const CX_DESC list_vpp_anime4k_mode[] = {
+    { _T("ani4k_original"),    (int)VppAnime4kMode::Original   },
+    { _T("ani4k_deblur"),      (int)VppAnime4kMode::Deblur     },
+    { _T("ani4k_darken_hq"),   (int)VppAnime4kMode::DarkenHQ   },
+    { _T("ani4k_thin_hq"),     (int)VppAnime4kMode::ThinHQ     },
+    { _T("ani4k_dog_sharpen"), (int)VppAnime4kMode::DogSharpen },
+    { _T("ani4k_dog"),         (int)VppAnime4kMode::Dog        },
+    { _T("ani4k_dtd"),         (int)VppAnime4kMode::Dtd        },
+    { NULL, 0 }
+};
+const CX_DESC list_vpp_anime4k_chroma_resize[] = {
+    { _T("spline36"), (int)VppAnime4kChromaResize::Spline36 },
+    { _T("bilinear"), (int)VppAnime4kChromaResize::Bilinear },
+    { _T("bicubic"),  (int)VppAnime4kChromaResize::Bicubic  },
+    { _T("lanczos3"), (int)VppAnime4kChromaResize::Lanczos3 },
+    { _T("joint"),    (int)VppAnime4kChromaResize::Joint    },
+    { NULL, 0 }
+};
+const CX_DESC list_vpp_anime4k_darken[] = {
+    { _T("off"), (int)VppAnime4kDarken::Off }, { _T("hq"), (int)VppAnime4kDarken::HQ },
+    { _T("fast"), (int)VppAnime4kDarken::Fast }, { _T("veryfast"), (int)VppAnime4kDarken::VeryFast },
+    { _T("false"), (int)VppAnime4kDarken::Off }, { _T("true"), (int)VppAnime4kDarken::HQ }, { NULL, 0 }
+};
+const CX_DESC list_vpp_anime4k_thin[] = {
+    { _T("off"), (int)VppAnime4kThin::Off }, { _T("hq"), (int)VppAnime4kThin::HQ },
+    { _T("fast"), (int)VppAnime4kThin::Fast }, { _T("veryfast"), (int)VppAnime4kThin::VeryFast },
+    { _T("false"), (int)VppAnime4kThin::Off }, { _T("true"), (int)VppAnime4kThin::HQ }, { NULL, 0 }
+};
+const CX_DESC list_vpp_anime4k_denoise[] = {
+    { _T("off"), (int)VppAnime4kDenoise::Off }, { _T("mean"), (int)VppAnime4kDenoise::Mean },
+    { _T("median"), (int)VppAnime4kDenoise::Median }, { _T("mode"), (int)VppAnime4kDenoise::Mode },
+    { _T("false"), (int)VppAnime4kDenoise::Off }, { NULL, 0 }
+};
+
+struct VppAnime4k {
+    bool enable;
+    VppAnime4kMode mode;
+    int scale;
+    float strength;
+    VppAnime4kChromaResize chromaResize;
+    bool chroma;
+    VppAnime4kDarken darken;
+    VppAnime4kThin   thin;
+    VppAnime4kDenoise denoise;
+    float denoiseIntensity;
+    float denoiseSpatial;
+    float denoiseCurve;
+    float denoiseHistReg;
+    VppAnime4kDenoise prefilterDenoise;
+    bool  clampHighlights;
+    float antiring;
+    int                  postResizeW;
+    int                  postResizeH;
+    RGY_VPP_RESIZE_ALGO  postResizeAlgo;
+    VppAnime4k();
+    bool operator==(const VppAnime4k &x) const;
+    bool operator!=(const VppAnime4k &x) const;
+    tstring print() const;
+};
+
+struct VppOnnx {
+    bool    enable;
+    tstring modelFile;   // path to the ONNX model
+    tstring provider;    // NVEnc execution provider: "auto" (=cuda, default), "cuda", "tensorrt"
+    tstring device;      // accepted for CLI compatibility (QSV/VCE); on NVEnc inference binds to the encoder's CUDA device
+    tstring interop;     // accepted for CLI compatibility; NVEnc uses the host-readback path
+    // The pre/post a model needs is inferred from its input/output channel count
+    // (1ch luma SR, 3ch RGB, 4ch RGB+noise, 2ch gray+noise, 3->2ch chroma). These
+    // options control the colour conversion + conditioning shared by the
+    // multi-channel families.
+    tstring colormatrix; // "auto" (bt601 for SD, bt709 for HD), "bt601", "bt709", "bt2020"
+    tstring colorrange;  // "auto" (tv), "tv", "pc"
+    tstring colorspace;  // 3ch models: "rgb" (default) or "ycbcr"
+    int     noise;       // noise sigma (0..255) fed to the conditioning channel of noise models (default 15)
+    // Opt-in end-of-chain resize (out_res=). When postResizeW/H are set, an internal
+    // resize runs AFTER the network, fitting the integer-scaled output to an
+    // arbitrary final resolution. A negative value on one axis keeps the source aspect.
+    int                  postResizeW;
+    int                  postResizeH;
+    RGY_VPP_RESIZE_ALGO  postResizeAlgo;
+
+    VppOnnx();
+    bool operator==(const VppOnnx &x) const;
+    bool operator!=(const VppOnnx &x) const;
+    tstring print() const;
+};
+
 struct RGYParamVpp {
     std::vector<VppType> filterOrder;
     RGY_VPP_RESIZE_ALGO resize_algo;
@@ -3457,6 +3634,8 @@ struct RGYParamVpp {
     VppDeintCsp deintCsp;
     VppLibplaceboResample resize_libplacebo;
     VppResizeFsr1 resize_fsr1;
+    VppResizeNis resize_nis;
+    VppResizeBicubic resize_bicubic;
     VppColorspace colorspace;
     VppLibplaceboToneMapping libplacebo_tonemapping;
     VppDelogo delogo;
@@ -3521,6 +3700,10 @@ struct RGYParamVpp {
     VppLibplaceboDeband libplacebo_deband;
     std::vector<VppOverlay> overlay;
     VppFruc fruc;
+    VppOnnx onnx;
+    tstring onnxModelDir;
+    bool    onnxListModels;
+    VppAnime4k anime4k;
     bool checkPerformance;
 
     RGYParamVpp();
@@ -3855,6 +4038,7 @@ struct RGYParamParallelEnc {
     std::vector<RGYParamParallelEncPipeHandle> chunkPipeHandles; // 各チャンクの先頭のフレームID (raw読み込み時に使用)
     RGYParamParallelEncCache cacheMode;
     bool delayChildSync; // 親-子間のデータやり取りを少し遅らせる
+    bool forceLargeMemoryFilters; // GPUメモリ使用量が大きいフィルタでの並列数制限を無効化する
     RGYParallelEncSendData *sendData; // 並列処理時に親-子間のデータやり取り用
     RGYParamParallelEnc();
     bool operator==(const RGYParamParallelEnc &x) const;

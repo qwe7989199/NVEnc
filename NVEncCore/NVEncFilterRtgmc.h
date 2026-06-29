@@ -118,6 +118,7 @@ protected:
         RGYCudaEvent backwardEvent;
         RGYCudaEvent forwardEvent;
         bool hasInlineParams;
+        bool inlineParamsChroma;
         std::array<RGYDegrainCompensateInlineParams, 3> backwardInlineParams;
         std::array<RGYDegrainCompensateInlineParams, 3> forwardInlineParams;
 
@@ -128,6 +129,7 @@ protected:
             backwardEvent(),
             forwardEvent(),
             hasInlineParams(false),
+            inlineParamsChroma(false),
             backwardInlineParams(),
             forwardInlineParams() {
         }
@@ -232,6 +234,7 @@ protected:
     RtgmcPendingFrameRef *findNoiseReference(const RGYFrameInfo *frame);
     void clearNoiseReference(const RGYFrameInfo *frame);
     RGY_ERR cacheSourceFrame(const RGYFrameInfo *frame, cudaStream_t stream, const std::vector<RGYCudaEvent> &wait_events);
+    const RtgmcSourceCacheFrame *findCachedSourceEntry(const RGYFrameInfo *frame) const;
     const RGYFrameInfo *findCachedSourceFrame(const RGYFrameInfo *frame, std::vector<RGYCudaEvent> *wait_events);
     int sourceFieldForFrame(const RGYFrameInfo *frame) const;
     RGY_ERR storePostLimitBaseReference(const RGYFrameInfo *frame, cudaStream_t stream, const std::vector<RGYCudaEvent> &wait_events);

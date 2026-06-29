@@ -590,13 +590,53 @@ int parse_one_vpp_option(const TCHAR *option_name, const TCHAR *strInput[], int 
                     }
                     if (param_arg == _T("sharpness")) {
                         try {
-                            vpp->resize_fsr1.sharpness = std::stof(param_val);
+                            const auto sharpness = std::stof(param_val);
+                            vpp->resize_fsr1.sharpness = sharpness;
+                            vpp->resize_nis.sharpness = sharpness;
                         } catch (...) {
                             print_cmd_error_invalid_value(tstring(option_name) + _T(" ") + param_arg + _T("="), param_val);
                             return 1;
                         }
                         if (vpp->resize_fsr1.sharpness < 0.0f || vpp->resize_fsr1.sharpness > 1.0f) {
                             print_cmd_error_invalid_value(tstring(option_name) + _T(" ") + param_arg + _T("="), param_val, _T("sharpness should be 0.0 - 1.0."));
+                            return 1;
+                        }
+                        continue;
+                    }
+                    if (param_arg == _T("cascade")) { // NIS cascade auto/on/off
+                        int value = 0;
+                        if (get_list_value(list_vpp_resize_nis_cascade, param_val.c_str(), &value)) {
+                            vpp->resize_nis.cascade = value;
+                        } else {
+                            print_cmd_error_invalid_value(tstring(option_name) + _T(" ") + param_arg + _T("="), param_val, list_vpp_resize_nis_cascade);
+                            return 1;
+                        }
+                        continue;
+                    }
+                    if (param_arg == _T("hdr")) { // NIS hdr band auto/sdr/pq
+                        int value = 0;
+                        if (get_list_value(list_vpp_resize_nis_hdr, param_val.c_str(), &value)) {
+                            vpp->resize_nis.hdrMode = value;
+                        } else {
+                            print_cmd_error_invalid_value(tstring(option_name) + _T(" ") + param_arg + _T("="), param_val, list_vpp_resize_nis_hdr);
+                            return 1;
+                        }
+                        continue;
+                    }
+                    if (param_arg == _T("b")) { // tunable bicubic B
+                        try {
+                            vpp->resize_bicubic.b = std::stof(param_val);
+                        } catch (...) {
+                            print_cmd_error_invalid_value(tstring(option_name) + _T(" ") + param_arg + _T("="), param_val);
+                            return 1;
+                        }
+                        continue;
+                    }
+                    if (param_arg == _T("c")) { // tunable bicubic C
+                        try {
+                            vpp->resize_bicubic.c = std::stof(param_val);
+                        } catch (...) {
+                            print_cmd_error_invalid_value(tstring(option_name) + _T(" ") + param_arg + _T("="), param_val);
                             return 1;
                         }
                         continue;
@@ -8685,6 +8725,283 @@ int parse_one_vpp_option(const TCHAR *option_name, const TCHAR *strInput[], int 
         }
         return 0;
     }
+    if (IS_OPTION("vpp-onnx") && ENABLE_VPP_FILTER_ONNX) {
+        vpp->onnx.enable = true;
+        if (i + 1 >= nArgNum || strInput[i + 1][0] == _T('-')) {
+            return 0;
+        }
+        i++;
+
+        const auto paramList = std::vector<std::string>{
+            "enable", "model", "modelfile", "provider", "device", "interop",
+            "colormatrix", "colorrange", "colorspace", "noise", "out_res", "resize"
+        };
+
+        for (const auto& param : split(strInput[i], _T(","))) {
+            auto pos = param.find_first_of(_T("="));
+            if (pos != std::string::npos) {
+                auto param_arg = param.substr(0, pos);
+                auto param_val = param.substr(pos + 1);
+                param_arg = tolowercase(param_arg);
+                if (param_arg == _T("enable")) {
+                    bool b = false;
+                    if (!cmd_string_to_bool(&b, param_val)) {
+                        vpp->onnx.enable = b;
+                    } else {
+                        print_cmd_error_invalid_value(tstring(option_name) + _T(" ") + param_arg + _T("="), param_val);
+                        return 1;
+                    }
+                    continue;
+                }
+                if (param_arg == _T("model") || param_arg == _T("modelfile")) {
+                    vpp->onnx.modelFile = param_val;
+                    continue;
+                }
+                if (param_arg == _T("provider")) {
+                    const tstring v = tolowercase(param_val);
+                    if (v == _T("auto") || v == _T("cuda") || v == _T("tensorrt") || v == _T("trt")) {
+                        vpp->onnx.provider = (v == _T("trt")) ? _T("tensorrt") : v;
+                    } else {
+                        print_cmd_error_invalid_value(tstring(option_name) + _T(" ") + param_arg + _T("="), param_val);
+                        return 1;
+                    }
+                    continue;
+                }
+                if (param_arg == _T("device")) {
+                    vpp->onnx.device = param_val;
+                    continue;
+                }
+                if (param_arg == _T("interop")) {
+                    const tstring v = tolowercase(param_val);
+                    if (v == _T("auto") || v == _T("ocl") || v == _T("host")) {
+                        vpp->onnx.interop = v;
+                    } else {
+                        print_cmd_error_invalid_value(tstring(option_name) + _T(" ") + param_arg + _T("="), param_val);
+                        return 1;
+                    }
+                    continue;
+                }
+                if (param_arg == _T("colormatrix")) {
+                    const tstring v = tolowercase(param_val);
+                    if (v == _T("auto") || v == _T("bt601") || v == _T("bt709") || v == _T("bt2020")) {
+                        vpp->onnx.colormatrix = v;
+                    } else {
+                        print_cmd_error_invalid_value(tstring(option_name) + _T(" ") + param_arg + _T("="), param_val);
+                        return 1;
+                    }
+                    continue;
+                }
+                if (param_arg == _T("colorrange")) {
+                    const tstring v = tolowercase(param_val);
+                    if (v == _T("auto") || v == _T("tv") || v == _T("limited") || v == _T("pc") || v == _T("full")) {
+                        vpp->onnx.colorrange = (v == _T("limited")) ? _T("tv") : (v == _T("full")) ? _T("pc") : v;
+                    } else {
+                        print_cmd_error_invalid_value(tstring(option_name) + _T(" ") + param_arg + _T("="), param_val);
+                        return 1;
+                    }
+                    continue;
+                }
+                if (param_arg == _T("colorspace")) {
+                    const tstring v = tolowercase(param_val);
+                    if (v == _T("rgb") || v == _T("ycbcr")) {
+                        vpp->onnx.colorspace = v;
+                    } else {
+                        print_cmd_error_invalid_value(tstring(option_name) + _T(" ") + param_arg + _T("="), param_val);
+                        return 1;
+                    }
+                    continue;
+                }
+                if (param_arg == _T("noise")) {
+                    try {
+                        vpp->onnx.noise = std::stoi(param_val);
+                    } catch (...) {
+                        print_cmd_error_invalid_value(tstring(option_name) + _T(" ") + param_arg + _T("="), param_val);
+                        return 1;
+                    }
+                    continue;
+                }
+                if (param_arg == _T("out_res")) {
+                    auto xpos = param_val.find_first_of(_T("xX"));
+                    int w = 0, h = 0;
+                    bool ok = false;
+                    if (xpos != tstring::npos) {
+                        try {
+                            w = std::stoi(param_val.substr(0, xpos));
+                            h = std::stoi(param_val.substr(xpos + 1));
+                            ok = true;
+                        } catch (...) {
+                            ok = false;
+                        }
+                    }
+                    if (!ok || w == 0 || h == 0 || (w < 0 && h < 0)) {
+                        print_cmd_error_invalid_value(tstring(option_name) + _T(" ") + param_arg + _T("="), param_val,
+                            _T("expected WxH; a negative value keeps aspect (e.g. -2x1080); both cannot be negative"));
+                        return 1;
+                    }
+                    vpp->onnx.postResizeW = w;
+                    vpp->onnx.postResizeH = h;
+                    continue;
+                }
+                if (param_arg == _T("resize")) {
+                    int value = 0;
+                    if (get_list_value(list_vpp_resize, param_val.c_str(), &value)) {
+                        vpp->onnx.postResizeAlgo = (RGY_VPP_RESIZE_ALGO)value;
+                    } else {
+                        print_cmd_error_invalid_value(tstring(option_name) + _T(" ") + param_arg + _T("="), param_val, list_vpp_resize);
+                        return 1;
+                    }
+                    continue;
+                }
+                print_cmd_error_unknown_opt_param(option_name, param_arg, paramList);
+                return 1;
+            } else {
+                if (tolowercase(param) == _T("list")) {
+                    vpp->onnxListModels = true;
+                    continue;
+                }
+                print_cmd_error_unknown_opt_param(option_name, param, paramList);
+                return 1;
+            }
+        }
+        return 0;
+    }
+    if (IS_OPTION("vpp-onnx-model-dir") && ENABLE_VPP_FILTER_ONNX) {
+        i++;
+        vpp->onnxModelDir = tstring(strInput[i]);
+        return 0;
+    }
+    if (IS_OPTION("vpp-anime4k-shader") && ENABLE_VPP_FILTER_ANIME4K) {
+        vpp->anime4k.enable = true;
+        if (i + 1 >= nArgNum || strInput[i + 1][0] == _T('-')) {
+            return 0;
+        }
+        i++;
+        const auto paramList = std::vector<std::string>{
+            "enable", "mode", "scale", "strength", "chroma_resize", "chroma",
+            "darken", "thin", "denoise", "denoise_intensity", "denoise_spatial", "denoise_curve", "denoise_hist_reg",
+            "prefilter_denoise", "clamp_highlights", "antiring", "out_res", "resize" };
+        for (const auto &param : split(strInput[i], _T(","))) {
+            auto pos = param.find_first_of(_T("="));
+            if (pos == std::string::npos) {
+                print_cmd_error_unknown_opt_param(option_name, param, paramList);
+                return 1;
+            }
+            auto param_arg = param.substr(0, pos);
+            auto param_val = param.substr(pos + 1);
+            param_arg = tolowercase(param_arg);
+            if (param_arg == _T("enable")) {
+                bool b = false;
+                if (!cmd_string_to_bool(&b, param_val)) { vpp->anime4k.enable = b; }
+                else { print_cmd_error_invalid_value(tstring(option_name) + _T(" ") + param_arg + _T("="), param_val); return 1; }
+                continue;
+            }
+            if (param_arg == _T("mode")) {
+                int value = 0;
+                if (get_list_value(list_vpp_anime4k_mode, param_val.c_str(), &value)) {
+                    vpp->anime4k.mode = (VppAnime4kMode)value;
+                    if (vpp->anime4k.mode == VppAnime4kMode::Deblur && vpp->anime4k.strength == FILTER_DEFAULT_ANIME4K_STRENGTH) {
+                        vpp->anime4k.strength = 1.0f;
+                    }
+                } else { print_cmd_error_invalid_value(tstring(option_name) + _T(" ") + param_arg + _T("="), param_val, list_vpp_anime4k_mode); return 1; }
+                continue;
+            }
+            if (param_arg == _T("scale")) {
+                try { vpp->anime4k.scale = std::stoi(param_val); }
+                catch (...) { print_cmd_error_invalid_value(tstring(option_name) + _T(" ") + param_arg + _T("="), param_val); return 1; }
+                continue;
+            }
+            if (param_arg == _T("strength")) {
+                try { vpp->anime4k.strength = std::stof(param_val); }
+                catch (...) { print_cmd_error_invalid_value(tstring(option_name) + _T(" ") + param_arg + _T("="), param_val); return 1; }
+                continue;
+            }
+            if (param_arg == _T("chroma_resize")) {
+                int value = 0;
+                if (get_list_value(list_vpp_anime4k_chroma_resize, param_val.c_str(), &value)) { vpp->anime4k.chromaResize = (VppAnime4kChromaResize)value; }
+                else { print_cmd_error_invalid_value(tstring(option_name) + _T(" ") + param_arg + _T("="), param_val, list_vpp_anime4k_chroma_resize); return 1; }
+                continue;
+            }
+            if (param_arg == _T("chroma")) {
+                bool b = false;
+                if (!cmd_string_to_bool(&b, param_val)) { vpp->anime4k.chroma = b; }
+                else { print_cmd_error_invalid_value(tstring(option_name) + _T(" ") + param_arg + _T("="), param_val); return 1; }
+                continue;
+            }
+            if (param_arg == _T("out_res")) {
+                auto xpos = param_val.find_first_of(_T("xX"));
+                int w = 0, h = 0; bool ok = false;
+                if (xpos != tstring::npos) {
+                    try { w = std::stoi(param_val.substr(0, xpos)); h = std::stoi(param_val.substr(xpos + 1)); ok = true; } catch (...) { ok = false; }
+                }
+                if (!ok || w == 0 || h == 0 || (w < 0 && h < 0)) {
+                    print_cmd_error_invalid_value(tstring(option_name) + _T(" ") + param_arg + _T("="), param_val,
+                        _T("expected WxH; a negative value keeps aspect (e.g. -2x1080); both cannot be negative"));
+                    return 1;
+                }
+                vpp->anime4k.postResizeW = w; vpp->anime4k.postResizeH = h;
+                continue;
+            }
+            if (param_arg == _T("resize")) {
+                int value = 0;
+                if (get_list_value(list_vpp_resize, param_val.c_str(), &value)) { vpp->anime4k.postResizeAlgo = (RGY_VPP_RESIZE_ALGO)value; }
+                else { print_cmd_error_invalid_value(tstring(option_name) + _T(" ") + param_arg + _T("="), param_val, list_vpp_resize); return 1; }
+                continue;
+            }
+            if (param_arg == _T("darken")) {
+                int value = 0;
+                if (get_list_value(list_vpp_anime4k_darken, param_val.c_str(), &value)) { vpp->anime4k.darken = (VppAnime4kDarken)value; }
+                else { print_cmd_error_invalid_value(tstring(option_name) + _T(" ") + param_arg + _T("="), param_val, list_vpp_anime4k_darken); return 1; }
+                continue;
+            }
+            if (param_arg == _T("thin")) {
+                int value = 0;
+                if (get_list_value(list_vpp_anime4k_thin, param_val.c_str(), &value)) { vpp->anime4k.thin = (VppAnime4kThin)value; }
+                else { print_cmd_error_invalid_value(tstring(option_name) + _T(" ") + param_arg + _T("="), param_val, list_vpp_anime4k_thin); return 1; }
+                continue;
+            }
+            if (param_arg == _T("denoise")) {
+                int value = 0;
+                if (get_list_value(list_vpp_anime4k_denoise, param_val.c_str(), &value)) { vpp->anime4k.denoise = (VppAnime4kDenoise)value; }
+                else { print_cmd_error_invalid_value(tstring(option_name) + _T(" ") + param_arg + _T("="), param_val, list_vpp_anime4k_denoise); return 1; }
+                continue;
+            }
+            if (param_arg == _T("denoise_intensity")) {
+                try { vpp->anime4k.denoiseIntensity = std::stof(param_val); } catch (...) { print_cmd_error_invalid_value(tstring(option_name) + _T(" ") + param_arg + _T("="), param_val); return 1; }
+                continue;
+            }
+            if (param_arg == _T("denoise_spatial")) {
+                try { vpp->anime4k.denoiseSpatial = std::stof(param_val); } catch (...) { print_cmd_error_invalid_value(tstring(option_name) + _T(" ") + param_arg + _T("="), param_val); return 1; }
+                continue;
+            }
+            if (param_arg == _T("denoise_curve")) {
+                try { vpp->anime4k.denoiseCurve = std::stof(param_val); } catch (...) { print_cmd_error_invalid_value(tstring(option_name) + _T(" ") + param_arg + _T("="), param_val); return 1; }
+                continue;
+            }
+            if (param_arg == _T("denoise_hist_reg")) {
+                try { vpp->anime4k.denoiseHistReg = std::stof(param_val); } catch (...) { print_cmd_error_invalid_value(tstring(option_name) + _T(" ") + param_arg + _T("="), param_val); return 1; }
+                continue;
+            }
+            if (param_arg == _T("prefilter_denoise")) {
+                int value = 0;
+                if (get_list_value(list_vpp_anime4k_denoise, param_val.c_str(), &value)) { vpp->anime4k.prefilterDenoise = (VppAnime4kDenoise)value; }
+                else { print_cmd_error_invalid_value(tstring(option_name) + _T(" ") + param_arg + _T("="), param_val, list_vpp_anime4k_denoise); return 1; }
+                continue;
+            }
+            if (param_arg == _T("clamp_highlights")) {
+                bool b = false;
+                if (!cmd_string_to_bool(&b, param_val)) { vpp->anime4k.clampHighlights = b; }
+                else { print_cmd_error_invalid_value(tstring(option_name) + _T(" ") + param_arg + _T("="), param_val); return 1; }
+                continue;
+            }
+            if (param_arg == _T("antiring")) {
+                try { vpp->anime4k.antiring = std::stof(param_val); } catch (...) { print_cmd_error_invalid_value(tstring(option_name) + _T(" ") + param_arg + _T("="), param_val); return 1; }
+                continue;
+            }
+            print_cmd_error_unknown_opt_param(option_name, param_arg, paramList);
+            return 1;
+        }
+        return 0;
+    }
     if (IS_OPTION("vpp-perf-monitor")) {
         vpp->checkPerformance = true;
         return 0;
@@ -11596,6 +11913,10 @@ int parse_one_ctrl_option(const TCHAR *option_name, const TCHAR *strInput[], int
         }
         return 0;
     }
+    if (IS_OPTION("parallel-force-large-memory-filters") && ENABLE_PARALLEL_ENC) {
+        ctrl->parallelEnc.forceLargeMemoryFilters = true;
+        return 0;
+    }
     if (IS_OPTION("process-monitor-dev-usage")) {
         ctrl->processMonitorDevUsage = true;
         return 0;
@@ -11734,6 +12055,23 @@ tstring gen_cmd(const RGYParamVpp *param, const RGYParamVpp *defaultPrm, bool sa
             if (param->resize_algo == RGY_VPP_RESIZE_FSR1
                 && param->resize_fsr1.sharpness != defaultPrm->resize_fsr1.sharpness) {
                 cmd << _T(",sharpness=") << std::setprecision(3) << param->resize_fsr1.sharpness;
+            } else if (param->resize_algo == RGY_VPP_RESIZE_NIS) {
+                if (param->resize_nis.sharpness != defaultPrm->resize_nis.sharpness) {
+                    cmd << _T(",sharpness=") << std::setprecision(3) << param->resize_nis.sharpness;
+                }
+                if (param->resize_nis.cascade != defaultPrm->resize_nis.cascade) {
+                    cmd << _T(",cascade=") << get_cx_desc(list_vpp_resize_nis_cascade, param->resize_nis.cascade);
+                }
+                if (param->resize_nis.hdrMode != defaultPrm->resize_nis.hdrMode) {
+                    cmd << _T(",hdr=") << get_cx_desc(list_vpp_resize_nis_hdr, param->resize_nis.hdrMode);
+                }
+            } else if (param->resize_algo == RGY_VPP_RESIZE_BICUBIC) {
+                if (param->resize_bicubic.b != defaultPrm->resize_bicubic.b) {
+                    cmd << _T(",b=") << std::setprecision(3) << param->resize_bicubic.b;
+                }
+                if (param->resize_bicubic.c != defaultPrm->resize_bicubic.c) {
+                    cmd << _T(",c=") << std::setprecision(3) << param->resize_bicubic.c;
+                }
             }
         }
     }
@@ -13183,6 +13521,58 @@ tstring gen_cmd(const RGYParamVpp *param, const RGYParamVpp *defaultPrm, bool sa
             cmd << _T(" --vpp-fruc");
         }
     }
+    if (param->onnx != defaultPrm->onnx) {
+        tmp.str(tstring());
+        if (!param->onnx.enable && save_disabled_prm) {
+            tmp << _T(",enable=false");
+        }
+        if (param->onnx.enable || save_disabled_prm) {
+            if (!param->onnx.modelFile.empty()) tmp << _T(",model=") << param->onnx.modelFile;
+            if (param->onnx.provider != defaultPrm->onnx.provider) tmp << _T(",provider=") << param->onnx.provider;
+            if (param->onnx.colormatrix != defaultPrm->onnx.colormatrix) tmp << _T(",colormatrix=") << param->onnx.colormatrix;
+            if (param->onnx.colorrange != defaultPrm->onnx.colorrange) tmp << _T(",colorrange=") << param->onnx.colorrange;
+            if (param->onnx.colorspace != defaultPrm->onnx.colorspace) tmp << _T(",colorspace=") << param->onnx.colorspace;
+            if (param->onnx.noise != defaultPrm->onnx.noise) tmp << _T(",noise=") << param->onnx.noise;
+            if (param->onnx.postResizeW != 0 && param->onnx.postResizeH != 0) {
+                tmp << _T(",out_res=") << param->onnx.postResizeW << _T("x") << param->onnx.postResizeH;
+                tmp << _T(",resize=") << get_cx_desc(list_vpp_resize, param->onnx.postResizeAlgo);
+            }
+        }
+        if (!tmp.str().empty()) {
+            cmd << _T(" --vpp-onnx ") << tmp.str().substr(1);
+        } else if (param->onnx.enable) {
+            cmd << _T(" --vpp-onnx");
+        }
+    }
+    if (!param->onnxModelDir.empty()) {
+        cmd << _T(" --vpp-onnx-model-dir ") << param->onnxModelDir;
+    }
+    if (param->anime4k != defaultPrm->anime4k) {
+        tmp.str(tstring());
+        if (!param->anime4k.enable && save_disabled_prm) tmp << _T(",enable=false");
+        if (param->anime4k.enable || save_disabled_prm) {
+            if (param->anime4k.mode != defaultPrm->anime4k.mode) tmp << _T(",mode=") << get_cx_desc(list_vpp_anime4k_mode, (int)param->anime4k.mode);
+            if (param->anime4k.scale != defaultPrm->anime4k.scale) tmp << _T(",scale=") << param->anime4k.scale;
+            if (param->anime4k.strength != defaultPrm->anime4k.strength) tmp << _T(",strength=") << param->anime4k.strength;
+            if (param->anime4k.chromaResize != defaultPrm->anime4k.chromaResize) tmp << _T(",chroma_resize=") << get_cx_desc(list_vpp_anime4k_chroma_resize, (int)param->anime4k.chromaResize);
+            if (param->anime4k.chroma != defaultPrm->anime4k.chroma) tmp << _T(",chroma=") << (param->anime4k.chroma ? _T("true") : _T("false"));
+            if (param->anime4k.darken != defaultPrm->anime4k.darken) tmp << _T(",darken=") << get_cx_desc(list_vpp_anime4k_darken, (int)param->anime4k.darken);
+            if (param->anime4k.thin != defaultPrm->anime4k.thin) tmp << _T(",thin=") << get_cx_desc(list_vpp_anime4k_thin, (int)param->anime4k.thin);
+            if (param->anime4k.denoise != defaultPrm->anime4k.denoise) tmp << _T(",denoise=") << get_cx_desc(list_vpp_anime4k_denoise, (int)param->anime4k.denoise);
+            if (param->anime4k.prefilterDenoise != defaultPrm->anime4k.prefilterDenoise) tmp << _T(",prefilter_denoise=") << get_cx_desc(list_vpp_anime4k_denoise, (int)param->anime4k.prefilterDenoise);
+            if (param->anime4k.clampHighlights != defaultPrm->anime4k.clampHighlights) tmp << _T(",clamp_highlights=") << (param->anime4k.clampHighlights ? _T("true") : _T("false"));
+            if (param->anime4k.antiring != defaultPrm->anime4k.antiring) tmp << _T(",antiring=") << param->anime4k.antiring;
+            if (param->anime4k.postResizeW != 0 && param->anime4k.postResizeH != 0) {
+                tmp << _T(",out_res=") << param->anime4k.postResizeW << _T("x") << param->anime4k.postResizeH;
+                tmp << _T(",resize=") << get_cx_desc(list_vpp_resize, param->anime4k.postResizeAlgo);
+            }
+        }
+        if (!tmp.str().empty()) {
+            cmd << _T(" --vpp-anime4k-shader ") << tmp.str().substr(1);
+        } else if (param->anime4k.enable) {
+            cmd << _T(" --vpp-anime4k-shader");
+        }
+    }
     OPT_BOOL(_T("--vpp-perf-monitor"), _T("--no-vpp-perf-monitor"), checkPerformance);
     return cmd.str();
 }
@@ -13792,6 +14182,7 @@ tstring gen_cmd(const RGYParamControl *param, const RGYParamControl *defaultPrm,
         if (!tmp.str().empty()) {
             cmd << _T(" --parallel ") << tmp.str().substr(1);
         }
+        OPT_BOOL(_T("--parallel-force-large-memory-filters"), _T(""), parallelEnc.forceLargeMemoryFilters);
     }
     return cmd.str();
 }
@@ -14740,6 +15131,14 @@ tstring gen_cmd_help_vpp() {
             _T("      sharpness=<float>\n")
             _T("        sharpness for fsr1 (0.0 - 1.0, default = %.1f)\n"),
             FILTER_DEFAULT_RESIZE_FSR1_SHARPNESS);
+#if ENCODER_NVENC
+            str += strsprintf(_T("\n")
+                _T("      sharpness=<float>           nis unsharp strength (0.0 - 1.0, default = %.2f)\n")
+                _T("      cascade=<string>            nis cascade for >2x: auto(default), on, off\n")
+                _T("      hdr=<string>                nis sharpen band: auto(default), sdr, pq\n")
+                _T("      b=<float> / c=<float>       tunable bicubic B / C (algo=bicubic; default B=%.2f C=%.2f)\n"),
+                FILTER_DEFAULT_RESIZE_NIS_SHARPNESS, FILTER_DEFAULT_RESIZE_BICUBIC_B, FILTER_DEFAULT_RESIZE_BICUBIC_C);
+#endif
 #if ENCODER_QSV
             str += strsprintf(_T("\n")
                 _T("      superres-mode=<string>\n")
@@ -15448,6 +15847,47 @@ tstring gen_cmd_help_vpp() {
         _T("      double                     double frame rate (fast)\n")
         _T("      fps=<int>/<int> or <float> target frame rate\n"));
 #endif
+#if ENABLE_VPP_FILTER_ONNX
+    str += strsprintf(_T("\n")
+        _T("   --vpp-onnx [<param1>=<value>][,<param2>=<value>][...]\n")
+        _T("     ONNX Runtime CNN filter: loads an ONNX model directly and runs it on\n")
+        _T("     the GPU. The pre/post a model needs is inferred from its input/output\n")
+        _T("     channel count (1ch luma-SR, 3ch RGB, 4ch RGB+noise, 2ch gray+noise,\n")
+        _T("     3->2ch chroma).\n")
+        _T("    params\n")
+        _T("      model=<path>                path to the .onnx model (required)\n")
+        _T("      provider=<string>           execution provider for inference\n")
+        _T("                                    auto (default, = cuda), cuda, tensorrt\n")
+        _T("      colormatrix=<string>        auto(default), bt601, bt709, bt2020\n")
+        _T("      colorrange=<string>         auto(default,=tv), tv, pc\n")
+        _T("      colorspace=<string>         rgb(default) or ycbcr (for 3ch models)\n")
+        _T("      noise=<int>                 noise sigma 0-255 for noise models (default 15)\n")
+        _T("      out_res=<int>x<int>         resize the network output to this resolution\n")
+        _T("                                    (a negative axis keeps aspect, e.g. -2x1080)\n")
+        _T("      resize=<string>             resampler for out_res (see --vpp-resize algo)\n"));
+    str += strsprintf(_T("\n")
+        _T("   --vpp-onnx-model-dir <string>   Directory containing models.json for registered ONNX models.\n"));
+#endif
+#if ENABLE_VPP_FILTER_ANIME4K
+    str += strsprintf(_T("\n")
+        _T("   --vpp-anime4k-shader [<param1>=<value>][,<param2>=<value>][...]\n")
+        _T("     GLSL Anime4K upscale/restore filter.\n")
+        _T("    params\n")
+        _T("      mode=<string>               ani4k_original(default), ani4k_deblur,\n")
+        _T("                                  ani4k_darken_hq, ani4k_thin_hq,\n")
+        _T("                                  ani4k_dog_sharpen, ani4k_dog, ani4k_dtd\n")
+        _T("      scale=<int>                 1 (refine only) or 2 (upscale, default)\n")
+        _T("      strength=<float>            refine strength (0.2 - 4.0, default 0.5)\n")
+        _T("      chroma_resize=<string>      spline36(default), bilinear, bicubic, lanczos3, joint\n")
+        _T("      darken=<string>             off(default), hq, fast, veryfast\n")
+        _T("      thin=<string>               off(default), hq, fast, veryfast\n")
+        _T("      denoise=<string>            off(default), mean, median, mode\n")
+        _T("      prefilter_denoise=<string>  off(default), mean, median, mode\n")
+        _T("      clamp_highlights=<bool>     clamp output luma to source max (default false)\n")
+        _T("      antiring=<float>            anti-ringing strength 0-1 (default 0)\n")
+        _T("      out_res=<int>x<int>         resize the anime4k output to this resolution\n")
+        _T("      resize=<string>             resampler for out_res (see --vpp-resize algo)\n"));
+#endif
     str += strsprintf(_T("\n")
         _T("   --vpp-perf-monitor           check vpp perfromance (for debug)\n")
     );
@@ -15458,6 +15898,8 @@ tstring gen_cmd_help_ctrl() {
     tstring str = strsprintf(_T("\n")
 #if ENABLE_PARALLEL_ENC
         _T("   --parallel <int> or auto     Enable parallel encoding by file splitting.\n")
+        _T("   --parallel-force-large-memory-filters\n")
+        _T("                                Disable large memory filter parallel count limit.\n")
 #endif
         _T("   --log <string>               set log file name\n")
         _T("   --log-level <string>         set log level\n")

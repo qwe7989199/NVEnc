@@ -6,6 +6,12 @@ option('nvenc_cuda_dir',
   description: 'CUDA installation path (default: auto-detect from CUDA_PATH env or /usr/local/cuda)'
 )
 
+option('nvenc_dev_ptx',
+  type: 'boolean',
+  value: false,
+  description: 'Dev build: build PTX only for the local GPU (faster). Falls back to compute_75 if GPU detection fails. Default: false (all architectures)'
+)
+
 option('enable_vapoursynth',
   type: 'boolean',
   value: true,
@@ -62,4 +68,17 @@ option('enable_vulkan',
   choices: ['auto', 'enabled', 'disabled'],
   value: 'auto',
   description: 'Enable Vulkan support (auto: enable when Vulkan is detected)'
+)
+
+option('enable_onnxruntime',
+  type: 'combo',
+  choices: ['auto', 'enabled', 'disabled'],
+  value: 'auto',
+  description: 'Enable ONNX Runtime CUDA/TensorRT support (auto: enable when ONNX Runtime headers are detected)'
+)
+
+option('onnxruntime_dir',
+  type: 'string',
+  value: '',
+  description: 'ONNX Runtime installation path for headers (expects include/onnxruntime_cxx_api.h)'
 )

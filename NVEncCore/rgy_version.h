@@ -29,9 +29,9 @@
 #ifndef __RGY_CONFIG_H__
 #define __RGY_CONFIG_H__
 
-#define VER_FILEVERSION             0,9,20,0
-#define VER_STR_FILEVERSION          "9.20"
-#define VER_STR_FILEVERSION_TCHAR _T("9.20")
+#define VER_FILEVERSION             0,9,22,0
+#define VER_STR_FILEVERSION          "9.22"
+#define VER_STR_FILEVERSION_TCHAR _T("9.22")
 
 #ifdef _M_IX86
 #define BUILD_ARCH_STR _T("x86")
@@ -93,7 +93,7 @@ const char *get_encoder_version();
 #define ENABLE_NVOFFRUC_HEADER 0
 #endif
 
-#ifdef _M_IX86
+#if defined(_M_IX86) || defined(NVENC_AUO)
 #define ENABLE_NVML 0
 #define ENABLE_NVRTC 0
 #define ENABLE_VMAF 0
@@ -101,6 +101,7 @@ const char *get_encoder_version();
 #define ENABLE_NVVFX 0
 #define ENABLE_NVOFFRUC 0
 #define ENABLE_NVSDKNGX 0
+#define ENABLE_ONNXRUNTIME 0
 #else
 #define ENABLE_NVML 1
 #define ENABLE_NVRTC 1
@@ -109,6 +110,7 @@ const char *get_encoder_version();
 #define ENABLE_NVVFX 1
 #define ENABLE_NVOFFRUC 1
 #define ENABLE_NVSDKNGX 1
+#define ENABLE_ONNXRUNTIME 1
 #endif
 
 #define ENABLE_VPP_SMOOTH_QP_FRAME 0
