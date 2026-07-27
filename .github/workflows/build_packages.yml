@@ -2,6 +2,8 @@ name: Build Linux Packages
 
 on:
   push:
+    branches:
+      - '*'
     tags:
       - '*'
   workflow_dispatch:
