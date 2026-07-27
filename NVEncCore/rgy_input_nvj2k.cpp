@@ -1,9 +1,9 @@
-// -----------------------------------------------------------------------------------------
+﻿// -----------------------------------------------------------------------------------------
 // QSVEnc/NVEnc by rigaya
 // -----------------------------------------------------------------------------------------
 // The MIT License
 //
-// Copyright (c) 2026
+// Copyright (c) 2026 rigaya
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -127,9 +127,10 @@ struct RGYInputNvJ2k::NvJ2kFuncs {
     }
 };
 
-static bool nvj2k_load_proc(HMODULE module, void **func, const char *name) {
-    *func = (void *)RGY_GET_PROC_ADDRESS(module, name);
-    return *func != nullptr;
+template<typename Func>
+static bool nvj2k_load_proc(HMODULE module, Func& func, const char *name) {
+    func = reinterpret_cast<Func>(RGY_GET_PROC_ADDRESS(module, name));
+    return func != nullptr;
 }
 
 static std::unique_ptr<RGYInputNvJ2k::NvJ2kFuncs> nvj2k_load() {
@@ -161,23 +162,23 @@ static std::unique_ptr<RGYInputNvJ2k::NvJ2kFuncs> nvj2k_load() {
     auto funcs = std::make_unique<RGYInputNvJ2k::NvJ2kFuncs>();
     funcs->module = module;
     bool ok = true;
-    ok &= nvj2k_load_proc(module, (void **)&funcs->CreateSimple, "nvjpeg2kCreateSimple");
-    ok &= nvj2k_load_proc(module, (void **)&funcs->Destroy, "nvjpeg2kDestroy");
-    ok &= nvj2k_load_proc(module, (void **)&funcs->DecodeStateCreate, "nvjpeg2kDecodeStateCreate");
-    ok &= nvj2k_load_proc(module, (void **)&funcs->DecodeStateDestroy, "nvjpeg2kDecodeStateDestroy");
-    ok &= nvj2k_load_proc(module, (void **)&funcs->StreamCreate, "nvjpeg2kStreamCreate");
-    ok &= nvj2k_load_proc(module, (void **)&funcs->StreamDestroy, "nvjpeg2kStreamDestroy");
-    ok &= nvj2k_load_proc(module, (void **)&funcs->StreamParse, "nvjpeg2kStreamParse");
-    ok &= nvj2k_load_proc(module, (void **)&funcs->StreamGetImageInfo, "nvjpeg2kStreamGetImageInfo");
-    ok &= nvj2k_load_proc(module, (void **)&funcs->StreamGetImageComponentInfo, "nvjpeg2kStreamGetImageComponentInfo");
-    ok &= nvj2k_load_proc(module, (void **)&funcs->Decode, "nvjpeg2kDecode");
+    ok &= nvj2k_load_proc(module, funcs->CreateSimple, "nvjpeg2kCreateSimple");
+    ok &= nvj2k_load_proc(module, funcs->Destroy, "nvjpeg2kDestroy");
+    ok &= nvj2k_load_proc(module, funcs->DecodeStateCreate, "nvjpeg2kDecodeStateCreate");
+    ok &= nvj2k_load_proc(module, funcs->DecodeStateDestroy, "nvjpeg2kDecodeStateDestroy");
+    ok &= nvj2k_load_proc(module, funcs->StreamCreate, "nvjpeg2kStreamCreate");
+    ok &= nvj2k_load_proc(module, funcs->StreamDestroy, "nvjpeg2kStreamDestroy");
+    ok &= nvj2k_load_proc(module, funcs->StreamParse, "nvjpeg2kStreamParse");
+    ok &= nvj2k_load_proc(module, funcs->StreamGetImageInfo, "nvjpeg2kStreamGetImageInfo");
+    ok &= nvj2k_load_proc(module, funcs->StreamGetImageComponentInfo, "nvjpeg2kStreamGetImageComponentInfo");
+    ok &= nvj2k_load_proc(module, funcs->Decode, "nvjpeg2kDecode");
     if (!ok) {
         return nullptr;
     }
     return funcs;
 }
 
-RGYInputNvJ2kPrm::RGYInputNvJ2kPrm(RGYInputAvcodecPrm base) : RGYInputAvcodecPrm(base) {
+RGYInputNvJ2kPrm::RGYInputNvJ2kPrm(const RGYInputAvcodecPrm& base) : RGYInputAvcodecPrm(base) {
     readVideo = true;
 }
 
@@ -195,8 +196,6 @@ RGYInputNvJ2k::RGYInputNvJ2k() :
 
 RGYInputNvJ2k::~RGYInputNvJ2k() {
     closeNvjpeg2k();
-    delete[] m_planes;
-    m_planes = nullptr;
 }
 
 bool RGYInputNvJ2k::outputCspSupported(RGY_CSP csp) const {
@@ -283,11 +282,13 @@ RGY_ERR RGYInputNvJ2k::ensureDevicePlane(DevicePlane& plane, const ComponentInfo
         cudaFree(plane.ptr);
         plane = DevicePlane();
     }
-    auto err = cudaMallocPitch((void **)&plane.ptr, &plane.pitch, widthBytes, comp.height);
+    void *devicePtr = nullptr;
+    auto err = cudaMallocPitch(&devicePtr, &plane.pitch, widthBytes, comp.height);
     if (err != cudaSuccess) {
         AddMessage(RGY_LOG_ERROR, _T("cudaMallocPitch for nvj2k component failed: %s.\n"), char_to_tstring(cudaGetErrorString(err)).c_str());
         return err_to_rgy(err);
     }
+    plane.ptr = static_cast<uint16_t *>(devicePtr);
     plane.widthBytes = widthBytes;
     plane.height = comp.height;
     return RGY_ERR_NONE;

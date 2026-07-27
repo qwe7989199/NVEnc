@@ -501,7 +501,7 @@ NVEncの入力方法は下の表のとおり。入力フォーマットをして
 |               vpy    |   ◎   |      |   ◎   |   ◎   |       |       |
 |               avhw   |   □   |      |        |   ◇   |       |       |
 |               avsw   |   ◎   |      |   ◎   |   ◎   |   ○  |   ○  |
-|               cupr   |       |      |   □   |        |       |       |
+|               cupr   |   □   |      |   □   |        |       |       |
 |               nvj2k  |   □   |      |   □   |   □   |       |       |
 
 ◎ ... 8bit / 9bit / 10bit / 12bit / 14bit / 16bitに対応  
@@ -554,7 +554,7 @@ avformat + cuvid decoderを使用して読み込む。
 ### --cupr
 avformatでdemux、CUDAでProResをデコードして読み込む。avformatはdemux、timestamp、音声、字幕、データストリーム、attachmentの処理に使用し、ProRes映像packetはCUDAで直接NVEnc用のGPU surfaceへデコードする。
 
-現在は10bit ProRes 4:2:2入力に対応。
+現在は10bit ProRes 4:2:2入力、および10/12bit ProRes 4:4:4 / 4:4:4:4入力に対応。alpha出力にはalpha channelを持つProRes 4444入力が必要。
 
 CUDA出力形式はエンコーダ入力経路に合わせて選択する。一般的な8bit H.264出力ではNV12へ直接デコードし、10bit HEVC/AV1出力ではP010へ直接デコードする。4:2:2 10bitを保持する必要がある場合はP210を使用する。
 

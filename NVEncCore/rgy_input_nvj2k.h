@@ -1,9 +1,9 @@
-// -----------------------------------------------------------------------------------------
+﻿// -----------------------------------------------------------------------------------------
 // QSVEnc/NVEnc by rigaya
 // -----------------------------------------------------------------------------------------
 // The MIT License
 //
-// Copyright (c) 2026
+// Copyright (c) 2026 rigaya
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -39,7 +39,7 @@
 
 class RGYInputNvJ2kPrm : public RGYInputAvcodecPrm {
 public:
-    RGYInputNvJ2kPrm(RGYInputAvcodecPrm base);
+    RGYInputNvJ2kPrm(const RGYInputAvcodecPrm& base);
     virtual ~RGYInputNvJ2kPrm() {};
 };
 
@@ -70,7 +70,7 @@ private:
     void *m_decodeState;
     void *m_jpStream;
     RGY_CSP m_outputCsp;
-    DevicePlane *m_planes;
+    std::unique_ptr<DevicePlane[]> m_planes;
     bool m_sourceXyz;
 };
 

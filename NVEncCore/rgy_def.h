@@ -654,7 +654,7 @@ struct VideoVUIInfo {
     }
 
     VideoVUIInfo(int descriptpresent_,
-        CspColorprim colorprim_, 
+        CspColorprim colorprim_,
         CspMatrix matrix_,
         CspTransfer transfer_,
         int format_,

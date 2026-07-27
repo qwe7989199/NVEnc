@@ -1,9 +1,9 @@
-// -----------------------------------------------------------------------------------------
+﻿// -----------------------------------------------------------------------------------------
 // QSVEnc/NVEnc by rigaya
 // -----------------------------------------------------------------------------------------
 // The MIT License
 //
-// Copyright (c) 2026
+// Copyright (c) 2026 rigaya
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -31,6 +31,7 @@
 
 #include <algorithm>
 #include <cstring>
+#include <limits>
 #include <numeric>
 #include "rgy_input_cupr_kernels.h"
 
@@ -45,6 +46,10 @@ static size_t cupr_align4(size_t value) {
 static void cupr_write_be16(std::vector<uint8_t>& dst, size_t off, size_t value) {
     dst[off + 0] = (uint8_t)((value >> 8) & 0xff);
     dst[off + 1] = (uint8_t)(value & 0xff);
+}
+
+static bool cupr_fits_be16(size_t value) {
+    return value <= std::numeric_limits<uint16_t>::max();
 }
 
 struct RGYInputCupr::ProResFrameInfo {
@@ -209,7 +214,15 @@ static RGY_ERR cupr_parse_prores_packet(RGYInputCupr::ProResFrameInfo& frame, co
         const size_t uPadded = cupr_align4(uSize);
         const size_t vPadded = cupr_align4(vSize);
         const size_t aPadded = frame.hasAlpha ? cupr_align4(aSize) : 0;
+        if (!cupr_fits_be16(yPadded) || !cupr_fits_be16(uPadded) || !cupr_fits_be16(vPadded) || !cupr_fits_be16(aPadded)) {
+            err = _T("padded ProRes slice plane size exceeds 16-bit header field");
+            return RGY_ERR_INVALID_DATA_TYPE;
+        }
         const size_t sliceStart = cupr_align4(frame.compressed.size());
+        if (sliceStart > std::numeric_limits<uint32_t>::max()) {
+            err = _T("packed ProRes slice offset exceeds 32-bit device header field");
+            return RGY_ERR_INVALID_DATA_TYPE;
+        }
         frame.compressed.resize(sliceStart, 0);
         frame.compressed.resize(sliceStart + outHeaderSize, 0);
         frame.compressed[sliceStart] = (uint8_t)((outHeaderSize << 3) | (src[0] & 0x07));
@@ -236,9 +249,14 @@ static RGY_ERR cupr_parse_prores_packet(RGYInputCupr::ProResFrameInfo& frame, co
             frame.compressed.resize(sliceStart + outHeaderSize + yPadded + uPadded + vPadded + aPadded, 0);
         }
 
+        const size_t packedSliceSize = frame.compressed.size() - sliceStart;
+        if (packedSliceSize > std::numeric_limits<uint32_t>::max() || mbX > std::numeric_limits<uint16_t>::max() || mbY > std::numeric_limits<uint16_t>::max() || sliceMbCount > std::numeric_limits<uint16_t>::max()) {
+            err = _T("packed ProRes slice metadata exceeds device header field");
+            return RGY_ERR_INVALID_DATA_TYPE;
+        }
         CuprSliceInfo si = {};
         si.offset = (uint32_t)sliceStart;
-        si.size = (uint32_t)(frame.compressed.size() - sliceStart);
+        si.size = (uint32_t)packedSliceSize;
         si.mb_x = (uint16_t)mbX;
         si.mb_y = (uint16_t)mbY;
         si.mb_count = (uint16_t)sliceMbCount;
@@ -254,7 +272,7 @@ static RGY_ERR cupr_parse_prores_packet(RGYInputCupr::ProResFrameInfo& frame, co
     return RGY_ERR_NONE;
 }
 
-RGYInputCuprPrm::RGYInputCuprPrm(RGYInputAvcodecPrm base) : RGYInputAvcodecPrm(base) {
+RGYInputCuprPrm::RGYInputCuprPrm(const RGYInputAvcodecPrm& base) : RGYInputAvcodecPrm(base) {
     readVideo = true;
     strategy = RGY_CUPR_DECODE_STRATEGY_AUTO;
 }
@@ -307,7 +325,8 @@ void RGYInputCupr::releaseDeviceBuffers() {
     m_dAlphaCapacity = 0;
 }
 
-RGY_ERR RGYInputCupr::ensureDeviceBuffer(uint8_t **ptr, size_t *capacity, size_t required) {
+template<typename T>
+RGY_ERR RGYInputCupr::ensureDeviceBuffer(T **ptr, size_t *capacity, size_t required) {
     if (*capacity >= required) {
         return RGY_ERR_NONE;
     }
@@ -316,11 +335,13 @@ RGY_ERR RGYInputCupr::ensureDeviceBuffer(uint8_t **ptr, size_t *capacity, size_t
         *ptr = nullptr;
         *capacity = 0;
     }
-    auto err = cudaMalloc(ptr, required);
+    void *devicePtr = nullptr;
+    auto err = cudaMalloc(&devicePtr, required);
     if (err != cudaSuccess) {
         AddMessage(RGY_LOG_ERROR, _T("cudaMalloc failed: %s.\n"), char_to_tstring(cudaGetErrorString(err)).c_str());
         return err_to_rgy(err);
     }
+    *ptr = static_cast<T *>(devicePtr);
     *capacity = required;
     return RGY_ERR_NONE;
 }
@@ -484,6 +505,10 @@ RGY_ERR RGYInputCupr::decodePacketToSurface(const AVPacket *pkt, CUFrameBuf *sur
             frame.width, frame.height, surface->width(), surface->height(), RGY_CSP_NAMES[surface->csp()]);
         return RGY_ERR_INVALID_VIDEO_PARAM;
     }
+    if (rgy_csp_has_alpha(m_outputCsp) && !frame.hasAlpha) {
+        AddMessage(RGY_LOG_ERROR, _T("cupr alpha output requires ProRes 4444 input with alpha channel.\n"));
+        return RGY_ERR_INVALID_VIDEO_PARAM;
+    }
 
     const int paddedHeight = ALIGN(frame.height, 16);
     const size_t ySamples = (size_t)frame.width * paddedHeight;
@@ -491,11 +516,11 @@ RGY_ERR RGYInputCupr::decodePacketToSurface(const AVPacket *pkt, CUFrameBuf *sur
     const size_t cSamples = (size_t)chromaWidth * paddedHeight;
     if ((sts = ensureDeviceBuffer(&m_dCompressed, &m_dCompressedCapacity, frame.compressed.size())) != RGY_ERR_NONE) return sts;
     if ((sts = ensureDeviceBuffer(&m_dSlices, &m_dSlicesCapacity, frame.slices.size() * sizeof(CuprSliceInfo))) != RGY_ERR_NONE) return sts;
-    if ((sts = ensureDeviceBuffer((uint8_t **)&m_dY, &m_dYCapacity, ySamples * sizeof(int16_t))) != RGY_ERR_NONE) return sts;
-    if ((sts = ensureDeviceBuffer((uint8_t **)&m_dCb, &m_dCbCapacity, cSamples * sizeof(int16_t))) != RGY_ERR_NONE) return sts;
-    if ((sts = ensureDeviceBuffer((uint8_t **)&m_dCr, &m_dCrCapacity, cSamples * sizeof(int16_t))) != RGY_ERR_NONE) return sts;
+    if ((sts = ensureDeviceBuffer(&m_dY, &m_dYCapacity, ySamples * sizeof(int16_t))) != RGY_ERR_NONE) return sts;
+    if ((sts = ensureDeviceBuffer(&m_dCb, &m_dCbCapacity, cSamples * sizeof(int16_t))) != RGY_ERR_NONE) return sts;
+    if ((sts = ensureDeviceBuffer(&m_dCr, &m_dCrCapacity, cSamples * sizeof(int16_t))) != RGY_ERR_NONE) return sts;
     if (m_outputCsp == RGY_CSP_NV12A || m_outputCsp == RGY_CSP_P010A) {
-        if ((sts = ensureDeviceBuffer((uint8_t **)&m_dAlpha, &m_dAlphaCapacity, ySamples * sizeof(int16_t))) != RGY_ERR_NONE) return sts;
+        if ((sts = ensureDeviceBuffer(&m_dAlpha, &m_dAlphaCapacity, ySamples * sizeof(int16_t))) != RGY_ERR_NONE) return sts;
     }
 
     auto cuerr = cudaMemcpyAsync(m_dCompressed, frame.compressed.data(), frame.compressed.size(), cudaMemcpyHostToDevice, stream);

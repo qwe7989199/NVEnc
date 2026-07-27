@@ -443,7 +443,7 @@ private:
         std::atomic<int> ref;
     public:
         PipelineTaskSurfacesPair(std::unique_ptr<RGYFrame> s) : surf_(std::move(s)), ref(0) {};
-        
+
         bool isFree() const { return ref == 0; } // 使用されていないフレームかを返す
         PipelineTaskSurface getRef() { return PipelineTaskSurface(surf_.get(), &ref); };
         const RGYFrame *surf() const { return surf_.get(); }
@@ -615,7 +615,7 @@ public:
     }
 
     bool hasDependencyFrame() const { return m_dependencyFrame != nullptr; }
-    
+
     virtual RGY_ERR setDependCUStream(cudaStream_t stream) {
         auto sts = m_dependencyFrame->setDependCUStream(stream);
         if (sts != RGY_ERR_NONE) {
@@ -657,7 +657,7 @@ public:
         m_cuevents.clear();
         m_dependencyFrame.reset();
     }
-    
+
     void streamWaitCuEvents(cudaStream_t stream) {
         for (auto& cuevent : m_cuevents) {
             if (cuevent != nullptr) {
@@ -823,7 +823,7 @@ public:
             prevframe = std::move(m_prevInputFrame.front());
             m_prevInputFrame.pop_front();
             queueSize--;
-            
+
             if (prevframe.first) {
                 prevframe.first->depend_clear();
                 if (auto surfVppInCuvid = dynamic_cast<PipelineTaskOutputSurf *>(prevframe.first.get())->surf().cuvid(); surfVppInCuvid != nullptr) {
@@ -1307,13 +1307,15 @@ class PipelineTaskCuprInput : public PipelineTask {
     RGYInputCupr *m_input;
     int64_t m_endPts;
     cudaStream_t m_streamDecode;
+    RGY_ERR m_streamInitErr;
     RGYListRef<cudaEvent_t> m_frameUseFinEvent;
 public:
     PipelineTaskCuprInput(NVGPUInfo *dev, int outMaxQueueSize, RGYInputCupr *input, int64_t endPts, RGYParamThread threadParam, std::shared_ptr<RGYLog> log)
-        : PipelineTask(PipelineTaskType::INPUTCU, dev, outMaxQueueSize, false, threadParam, log), m_input(input), m_endPts(endPts), m_streamDecode(nullptr), m_frameUseFinEvent() {
+        : PipelineTask(PipelineTaskType::INPUTCU, dev, outMaxQueueSize, false, threadParam, log), m_input(input), m_endPts(endPts), m_streamDecode(nullptr), m_streamInitErr(RGY_ERR_NONE), m_frameUseFinEvent() {
         NVEncCtxAutoLock(ctxlock(m_dev->vidCtxLock()));
         auto ret = cudaStreamCreateWithFlags(&m_streamDecode, cudaStreamNonBlocking);
         if (ret != cudaSuccess) {
+            m_streamInitErr = err_to_rgy(ret);
             PrintMes(RGY_LOG_ERROR, _T("Failed to create cupr decode stream: %s.\n"), char_to_tstring(cudaGetErrorString(ret)).c_str());
         }
     }
@@ -1360,6 +1362,9 @@ public:
         return RGY_ERR_NONE;
     }
     RGY_ERR LoadNextFrame() {
+        if (m_streamInitErr != RGY_ERR_NONE) {
+            return m_streamInitErr;
+        }
         if (m_stopwatch) m_stopwatch->set(0);
         auto surfWork = getWorkSurf();
         if (surfWork == nullptr) {
@@ -1407,13 +1412,15 @@ class PipelineTaskNvJ2kInput : public PipelineTask {
     RGYInputNvJ2k *m_input;
     int64_t m_endPts;
     cudaStream_t m_streamDecode;
+    RGY_ERR m_streamInitErr;
     RGYListRef<cudaEvent_t> m_frameUseFinEvent;
 public:
     PipelineTaskNvJ2kInput(NVGPUInfo *dev, int outMaxQueueSize, RGYInputNvJ2k *input, int64_t endPts, RGYParamThread threadParam, std::shared_ptr<RGYLog> log)
-        : PipelineTask(PipelineTaskType::INPUTCU, dev, outMaxQueueSize, false, threadParam, log), m_input(input), m_endPts(endPts), m_streamDecode(nullptr), m_frameUseFinEvent() {
+        : PipelineTask(PipelineTaskType::INPUTCU, dev, outMaxQueueSize, false, threadParam, log), m_input(input), m_endPts(endPts), m_streamDecode(nullptr), m_streamInitErr(RGY_ERR_NONE), m_frameUseFinEvent() {
         NVEncCtxAutoLock(ctxlock(m_dev->vidCtxLock()));
         auto ret = cudaStreamCreateWithFlags(&m_streamDecode, cudaStreamNonBlocking);
         if (ret != cudaSuccess) {
+            m_streamInitErr = err_to_rgy(ret);
             PrintMes(RGY_LOG_ERROR, _T("Failed to create nvj2k decode stream: %s.\n"), char_to_tstring(cudaGetErrorString(ret)).c_str());
         }
     }
@@ -1460,6 +1467,9 @@ public:
         return RGY_ERR_NONE;
     }
     RGY_ERR LoadNextFrame() {
+        if (m_streamInitErr != RGY_ERR_NONE) {
+            return m_streamInitErr;
+        }
         if (m_stopwatch) m_stopwatch->set(0);
         auto surfWork = getWorkSurf();
         if (surfWork == nullptr) {
@@ -1676,7 +1686,7 @@ public:
     PipelineTaskSurface addTaskSurface(std::unique_ptr<CUFrameCuvid>& surf) {
         return m_workSurfs.addSurface(surf);
     }
-    
+
 protected:
     RGY_ERR getOutputFrame() {
         auto ret = RGY_ERR_NONE;
@@ -2078,7 +2088,7 @@ protected:
         if (m_currentChunk >= (int)m_parallelEnc->parallelCount()) {
             return RGY_ERR_MORE_BITSTREAM;
         }
-        
+
         if (m_parallelEnc->cacheMode(m_currentChunk) == RGYParamParallelEncCache::File) {
             // 戻り値を確認
             auto procsts = checkEncodeResult();
@@ -2939,7 +2949,7 @@ public:
             releaseEncodeBufferFrame(m_stEncodeBuffer[i].get());
         }
         m_stEncodeBuffer.clear();
-        
+
         if (m_stEOSOutputBfr.stOutputBfr.hOutputEvent) {
             m_dev->encoder()->NvEncUnregisterAsyncEvent(m_stEOSOutputBfr.stOutputBfr.hOutputEvent);
             CloseEvent(m_stEOSOutputBfr.stOutputBfr.hOutputEvent);
@@ -3491,7 +3501,7 @@ public:
             }
             if (m_stopwatch) m_stopwatch->add(0, 0);
         }
-        
+
         if (surfEncodeIn) {
             auto sts = encodeFrame(surfEncodeIn->encBuffer(), m_inFrames++, surfEncodeIn->timestamp(), surfEncodeIn->duration(), surfEncodeIn->inputFrameId(), surfEncodeIn->dataList());
             if (sts != RGY_ERR_NONE) {
@@ -3771,7 +3781,7 @@ public:
                 void operator()(CUFrameEnc* p) { if (p) qEncodeBufferFree.push(p); }
             };
             std::unique_ptr<CUFrameEnc, CUFrameEncAutoDelete> encBuffer(nullptr, CUFrameEncAutoDelete(m_qEncodeBufferFree));
-            PipelineTaskSurface frameVppOut; 
+            PipelineTaskSurface frameVppOut;
             if (m_dev->encoder()) {
                 { // 使用していないエンコードバッファを取得
                     CUFrameEnc *encBufferPtr = nullptr;
@@ -3949,7 +3959,7 @@ public:
             m_writer->WriteNextFrame((RGYFrame *)nullptr);
         }
     };
-    
+
     virtual std::optional<std::pair<RGYFrameInfo, int>> requiredSurfIn() override { return std::nullopt; };
     virtual std::optional<std::pair<RGYFrameInfo, int>> requiredSurfOut() override { return std::nullopt; };
 

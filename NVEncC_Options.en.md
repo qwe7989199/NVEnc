@@ -489,7 +489,7 @@ reader used will be selected depending on the extension of input file.
 | vpy    |   ◎   |      |   ◎   |   ◎   |       |       |
 | avhw   |   □   |      |        |   ◇   |       |       |
 | avsw   |   ◎   |      |   ◎   |   ◎   |   ○  |   ○  |
-| cupr   |       |      |   □   |        |       |       |
+| cupr   |   □   |      |   □   |        |       |       |
 | nvj2k  |   □   |      |   □   |   □   |       |       |
 
 ◎ ... 8bit / 9bit / 10bit / 12bit / 14bit / 16bit supported  
@@ -545,7 +545,7 @@ since entire transcode process will be run on the GPU.
 ### --cupr
 Read input file using avformat demux and CUDA ProRes decode. In this mode, avformat is used for demuxing, timestamps, audio, subtitles, data streams and attachments, while ProRes video packets are decoded directly on CUDA into GPU surfaces for NVEnc.
 
-Currently supports 10-bit ProRes 4:2:2 input.
+Currently supports 10-bit ProRes 4:2:2 input and 10/12-bit ProRes 4:4:4 / 4:4:4:4 input. Alpha output requires ProRes 4444 input with alpha.
 
 The CUDA output format is selected from the encoder input path. Common 8-bit H.264 output decodes directly to NV12, while 10-bit HEVC/AV1 output decodes directly to P010. P210 is still used when 4:2:2 10-bit preservation is required.
 

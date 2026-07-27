@@ -361,8 +361,10 @@ void RGYInput::CreateInputInfo(const TCHAR *inputTypeName, const TCHAR *inputCSp
 #include "rgy_input_vpy.h"
 #include "rgy_input_sm.h"
 #include "rgy_input_avcodec.h"
+#if ENABLE_AVSW_READER && ENCODER_NVENC
 #include "rgy_input_cupr.h"
 #include "rgy_input_nvj2k.h"
+#endif
 
 #if ENABLE_AVSW_READER
 template<bool subtitle, typename T>
@@ -602,174 +604,7 @@ RGY_ERR initReaders(
 #endif
 #if ENABLE_AVSW_READER
     RGYInputAvcodecPrm inputInfoAVCuvid(inputPrm);
-#if ENCODER_NVENC
-    std::unique_ptr<RGYInputCuprPrm> inputPrmCupr;
-    std::unique_ptr<RGYInputNvJ2kPrm> inputPrmNvJ2k;
-#endif
-#endif
-#if ENABLE_SM_READER
-    RGYInputSMPrm inputPrmSM(inputPrm);
-    inputPrmSM.parentProcessID = ctrl->parentProcessID;
-#endif
-
-    switch (input->type) {
-#if ENABLE_AVI_READER
-    case RGY_INPUT_FMT_AVI:
-        log->write(RGY_LOG_DEBUG, RGY_LOGT_IN, _T("avi reader selected.\n"));
-        pFileReader.reset(new RGYInputAvi());
-        break;
-#endif //ENABLE_AVI_READER
-#if ENABLE_AVISYNTH_READER
-    case RGY_INPUT_FMT_AVS:
-        inputPrmAvs.nAudioSelectCount = common->nAudioSelectCount;
-        inputPrmAvs.ppAudioSelect = common->ppAudioSelectList;
-        inputPrmAvs.avsdll = ctrl->avsdll;
-        inputPrmAvs.seekRatio = common->seekRatio;
-        pInputPrm = &inputPrmAvs;
-        log->write(RGY_LOG_DEBUG, RGY_LOGT_IN, _T("avs reader selected.\n"));
-        pFileReader.reset(new RGYInputAvs());
-        break;
-#endif //ENABLE_AVISYNTH_READER
-#if ENABLE_VAPOURSYNTH_READER
-    case RGY_INPUT_FMT_VPY:
-    case RGY_INPUT_FMT_VPY_MT:
-        inputPrmVpy.vsdir = ctrl->vsdir;
-        inputPrmVpy.seekRatio = common->seekRatio;
-        inputPrmVpy.assumeScriptDir = ctrl->vpyAssumeScriptDir;
-        pInputPrm = &inputPrmVpy;
-        log->write(RGY_LOG_DEBUG, RGY_LOGT_IN, _T("vpy reader selected.\n"));
-        pFileReader.reset(new RGYInputVpy());
-        break;
-#endif //ENABLE_VAPOURSYNTH_READER
-#if ENABLE_AVSW_READER
-    case RGY_INPUT_FMT_CUPR: {
-#if ENCODER_NVENC
-        inputInfoAVCuvid.threadCsp = ctrl->threadCsp;
-        inputInfoAVCuvid.simdCsp = ctrl->simdCsp;
-        inputInfoAVCuvid.pInputFormat = common->AVInputFormat;
-        inputInfoAVCuvid.readVideo = true;
-        inputInfoAVCuvid.videoTrack = common->videoTrack;
-        inputInfoAVCuvid.videoStreamId = common->videoStreamId;
-        inputInfoAVCuvid.readAudio = common->nAudioSelectCount > 0;
-        inputInfoAVCuvid.readSubtitle = (common->nSubtitleSelectCount > 0) || (subburnTrackId > 0);
-        inputInfoAVCuvid.readData = common->nDataSelectCount > 0;
-        inputInfoAVCuvid.readAttachment = common->nAttachmentSelectCount > 0;
-        inputInfoAVCuvid.readChapter = true;
-        inputInfoAVCuvid.videoAvgFramerate = rgy_rational<int>(input->fpsN, input->fpsD);
-        inputInfoAVCuvid.analyzeSec = common->demuxAnalyzeSec;
-        inputInfoAVCuvid.probesize = common->demuxProbesize;
-        inputInfoAVCuvid.pixFmtStr = common->inputPixFmtStr;
-        inputInfoAVCuvid.inputRetry = common->inputRetry;
-        inputInfoAVCuvid.nTrimCount = common->nTrimCount;
-        inputInfoAVCuvid.pTrimList = common->pTrimList;
-        inputInfoAVCuvid.fileIndex = -1;
-        inputInfoAVCuvid.trackStartAudio = sourceAudioTrackIdStart;
-        inputInfoAVCuvid.trackStartSubtitle = sourceSubtitleTrackIdStart;
-        inputInfoAVCuvid.trackStartData = sourceDataTrackIdStart;
-        inputInfoAVCuvid.nAudioSelectCount = common->nAudioSelectCount;
-        inputInfoAVCuvid.ppAudioSelect = common->ppAudioSelectList;
-        inputInfoAVCuvid.ppSubtitleSelect = subTitleSelectList.data();
-        inputInfoAVCuvid.nSubtitleSelectCount = (int)subTitleSelectList.size();
-        inputInfoAVCuvid.ppDataSelect = common->ppDataSelectList;
-        inputInfoAVCuvid.nDataSelectCount = common->nDataSelectCount;
-        inputInfoAVCuvid.ppAttachmentSelect = common->ppAttachmentSelectList;
-        inputInfoAVCuvid.nAttachmentSelectCount = common->nAttachmentSelectCount;
-        inputInfoAVCuvid.procSpeedLimit = ctrl->procSpeedLimit;
-        inputInfoAVCuvid.AVSyncMode = RGY_AVSYNC_AUTO;
-        inputInfoAVCuvid.seekRatio = common->seekRatio;
-        inputInfoAVCuvid.seekSec = common->seekSec;
-        inputInfoAVCuvid.seekToSec = common->seekToSec;
-        inputInfoAVCuvid.logFramePosList = ctrl->logFramePosList.getFilename(common->inputFilename, _T(".framelist.csv"));
-        inputInfoAVCuvid.logPackets = ctrl->logPacketsList.getFilename(common->inputFilename, _T(".packets.csv"));
-        inputInfoAVCuvid.threadInput = ctrl->threadInput;
-        inputInfoAVCuvid.threadParamInput = ctrl->threadParams.get(RGYThreadType::INPUT);
-        inputInfoAVCuvid.queueInfo = (perfMonitor) ? perfMonitor->GetQueueInfoPtr() : nullptr;
-        inputInfoAVCuvid.HWDecCodecCsp = &HWDecCodecCsp;
-        inputInfoAVCuvid.videoDetectPulldown = !vpp_rff && !vpp_afs && common->AVSyncMode == RGY_AVSYNC_AUTO;
-        inputInfoAVCuvid.parseHDRmetadata = common->maxCll == maxCLLSource || common->masterDisplay == masterDisplaySource || vpp_require_hdr_metadata;
-        inputInfoAVCuvid.hdr10plusMetadataCopy = common->hdr10plusMetadataCopy || vpp_require_hdr_metadata;
-        inputInfoAVCuvid.doviRpuMetadataCopy = common->doviRpuMetadataCopy || vpp_require_hdr_metadata;
-        inputInfoAVCuvid.interlaceSet = input->picstruct;
-        inputInfoAVCuvid.qpTableListRef = qpTableListRef;
-        inputInfoAVCuvid.inputOpt = common->inputOpt;
-        inputInfoAVCuvid.lowLatency = ctrl->lowLatency;
-        inputInfoAVCuvid.audioReadOffsetSec = (ctrl->lowLatency) ? ((output_is_pipe(common)) ? 0.0 : 2.0) : 0.0;
-        inputInfoAVCuvid.timestampPassThrough = common->timestampPassThrough;
-        inputInfoAVCuvid.hevcbsf = common->hevcbsf;
-        inputPrmCupr = std::make_unique<RGYInputCuprPrm>(inputInfoAVCuvid);
-        inputPrmCupr->strategy = inprm->cuprStrategy;
-        pInputPrm = inputPrmCupr.get();
-        log->write(RGY_LOG_DEBUG, RGY_LOGT_IN, _T("cupr reader selected.\n"));
-        pFileReader.reset(new RGYInputCupr());
-#else
-        return RGY_ERR_UNSUPPORTED;
-#endif
-        } break;
-    case RGY_INPUT_FMT_NVJ2K: {
-#if ENCODER_NVENC
-        inputInfoAVCuvid.threadCsp = ctrl->threadCsp;
-        inputInfoAVCuvid.simdCsp = ctrl->simdCsp;
-        inputInfoAVCuvid.pInputFormat = common->AVInputFormat;
-        inputInfoAVCuvid.readVideo = true;
-        inputInfoAVCuvid.videoTrack = common->videoTrack;
-        inputInfoAVCuvid.videoStreamId = common->videoStreamId;
-        inputInfoAVCuvid.readAudio = common->nAudioSelectCount > 0;
-        inputInfoAVCuvid.readSubtitle = (common->nSubtitleSelectCount > 0) || (subburnTrackId > 0);
-        inputInfoAVCuvid.readData = common->nDataSelectCount > 0;
-        inputInfoAVCuvid.readAttachment = common->nAttachmentSelectCount > 0;
-        inputInfoAVCuvid.readChapter = true;
-        inputInfoAVCuvid.videoAvgFramerate = rgy_rational<int>(input->fpsN, input->fpsD);
-        inputInfoAVCuvid.analyzeSec = common->demuxAnalyzeSec;
-        inputInfoAVCuvid.probesize = common->demuxProbesize;
-        inputInfoAVCuvid.pixFmtStr = common->inputPixFmtStr;
-        inputInfoAVCuvid.inputRetry = common->inputRetry;
-        inputInfoAVCuvid.nTrimCount = common->nTrimCount;
-        inputInfoAVCuvid.pTrimList = common->pTrimList;
-        inputInfoAVCuvid.fileIndex = -1;
-        inputInfoAVCuvid.trackStartAudio = sourceAudioTrackIdStart;
-        inputInfoAVCuvid.trackStartSubtitle = sourceSubtitleTrackIdStart;
-        inputInfoAVCuvid.trackStartData = sourceDataTrackIdStart;
-        inputInfoAVCuvid.nAudioSelectCount = common->nAudioSelectCount;
-        inputInfoAVCuvid.ppAudioSelect = common->ppAudioSelectList;
-        inputInfoAVCuvid.ppSubtitleSelect = subTitleSelectList.data();
-        inputInfoAVCuvid.nSubtitleSelectCount = (int)subTitleSelectList.size();
-        inputInfoAVCuvid.ppDataSelect = common->ppDataSelectList;
-        inputInfoAVCuvid.nDataSelectCount = common->nDataSelectCount;
-        inputInfoAVCuvid.ppAttachmentSelect = common->ppAttachmentSelectList;
-        inputInfoAVCuvid.nAttachmentSelectCount = common->nAttachmentSelectCount;
-        inputInfoAVCuvid.procSpeedLimit = ctrl->procSpeedLimit;
-        inputInfoAVCuvid.AVSyncMode = RGY_AVSYNC_AUTO;
-        inputInfoAVCuvid.seekRatio = common->seekRatio;
-        inputInfoAVCuvid.seekSec = common->seekSec;
-        inputInfoAVCuvid.seekToSec = common->seekToSec;
-        inputInfoAVCuvid.logFramePosList = ctrl->logFramePosList.getFilename(common->inputFilename, _T(".framelist.csv"));
-        inputInfoAVCuvid.logPackets = ctrl->logPacketsList.getFilename(common->inputFilename, _T(".packets.csv"));
-        inputInfoAVCuvid.threadInput = ctrl->threadInput;
-        inputInfoAVCuvid.threadParamInput = ctrl->threadParams.get(RGYThreadType::INPUT);
-        inputInfoAVCuvid.queueInfo = (perfMonitor) ? perfMonitor->GetQueueInfoPtr() : nullptr;
-        inputInfoAVCuvid.HWDecCodecCsp = &HWDecCodecCsp;
-        inputInfoAVCuvid.videoDetectPulldown = !vpp_rff && !vpp_afs && common->AVSyncMode == RGY_AVSYNC_AUTO;
-        inputInfoAVCuvid.parseHDRmetadata = common->maxCll == maxCLLSource || common->masterDisplay == masterDisplaySource || vpp_require_hdr_metadata;
-        inputInfoAVCuvid.hdr10plusMetadataCopy = common->hdr10plusMetadataCopy || vpp_require_hdr_metadata;
-        inputInfoAVCuvid.doviRpuMetadataCopy = common->doviRpuMetadataCopy || vpp_require_hdr_metadata;
-        inputInfoAVCuvid.interlaceSet = input->picstruct;
-        inputInfoAVCuvid.qpTableListRef = qpTableListRef;
-        inputInfoAVCuvid.inputOpt = common->inputOpt;
-        inputInfoAVCuvid.lowLatency = ctrl->lowLatency;
-        inputInfoAVCuvid.audioReadOffsetSec = (ctrl->lowLatency) ? ((output_is_pipe(common)) ? 0.0 : 2.0) : 0.0;
-        inputInfoAVCuvid.timestampPassThrough = common->timestampPassThrough;
-        inputInfoAVCuvid.hevcbsf = common->hevcbsf;
-        inputPrmNvJ2k = std::make_unique<RGYInputNvJ2kPrm>(inputInfoAVCuvid);
-        pInputPrm = inputPrmNvJ2k.get();
-        log->write(RGY_LOG_DEBUG, RGY_LOGT_IN, _T("nvj2k reader selected.\n"));
-        pFileReader.reset(new RGYInputNvJ2k());
-#else
-        return RGY_ERR_UNSUPPORTED;
-#endif
-        } break;
-    case RGY_INPUT_FMT_AVHW:
-    case RGY_INPUT_FMT_AVSW:
-    case RGY_INPUT_FMT_AVANY: {
+    auto setAvcodecReaderPrm = [&]() {
         inputInfoAVCuvid.threadCsp = ctrl->threadCsp;
         inputInfoAVCuvid.simdCsp = ctrl->simdCsp;
         inputInfoAVCuvid.pInputFormat = common->AVInputFormat;
@@ -823,6 +658,74 @@ RGY_ERR initReaders(
         inputInfoAVCuvid.audioReadOffsetSec = (ctrl->lowLatency) ? ((output_is_pipe(common)) ? 0.0 : 2.0) : 0.0;
         inputInfoAVCuvid.timestampPassThrough = common->timestampPassThrough;
         inputInfoAVCuvid.hevcbsf = common->hevcbsf;
+    };
+#if ENCODER_NVENC
+    std::unique_ptr<RGYInputCuprPrm> inputPrmCupr;
+    std::unique_ptr<RGYInputNvJ2kPrm> inputPrmNvJ2k;
+#endif
+#endif
+#if ENABLE_SM_READER
+    RGYInputSMPrm inputPrmSM(inputPrm);
+    inputPrmSM.parentProcessID = ctrl->parentProcessID;
+#endif
+
+    switch (input->type) {
+#if ENABLE_AVI_READER
+    case RGY_INPUT_FMT_AVI:
+        log->write(RGY_LOG_DEBUG, RGY_LOGT_IN, _T("avi reader selected.\n"));
+        pFileReader.reset(new RGYInputAvi());
+        break;
+#endif //ENABLE_AVI_READER
+#if ENABLE_AVISYNTH_READER
+    case RGY_INPUT_FMT_AVS:
+        inputPrmAvs.nAudioSelectCount = common->nAudioSelectCount;
+        inputPrmAvs.ppAudioSelect = common->ppAudioSelectList;
+        inputPrmAvs.avsdll = ctrl->avsdll;
+        inputPrmAvs.seekRatio = common->seekRatio;
+        pInputPrm = &inputPrmAvs;
+        log->write(RGY_LOG_DEBUG, RGY_LOGT_IN, _T("avs reader selected.\n"));
+        pFileReader.reset(new RGYInputAvs());
+        break;
+#endif //ENABLE_AVISYNTH_READER
+#if ENABLE_VAPOURSYNTH_READER
+    case RGY_INPUT_FMT_VPY:
+    case RGY_INPUT_FMT_VPY_MT:
+        inputPrmVpy.vsdir = ctrl->vsdir;
+        inputPrmVpy.seekRatio = common->seekRatio;
+        inputPrmVpy.assumeScriptDir = ctrl->vpyAssumeScriptDir;
+        pInputPrm = &inputPrmVpy;
+        log->write(RGY_LOG_DEBUG, RGY_LOGT_IN, _T("vpy reader selected.\n"));
+        pFileReader.reset(new RGYInputVpy());
+        break;
+#endif //ENABLE_VAPOURSYNTH_READER
+#if ENABLE_AVSW_READER
+    case RGY_INPUT_FMT_CUPR: {
+#if ENCODER_NVENC
+        setAvcodecReaderPrm();
+        inputPrmCupr = std::make_unique<RGYInputCuprPrm>(inputInfoAVCuvid);
+        inputPrmCupr->strategy = inprm->cuprStrategy;
+        pInputPrm = inputPrmCupr.get();
+        log->write(RGY_LOG_DEBUG, RGY_LOGT_IN, _T("cupr reader selected.\n"));
+        pFileReader.reset(new RGYInputCupr());
+#else
+        return RGY_ERR_UNSUPPORTED;
+#endif
+        } break;
+    case RGY_INPUT_FMT_NVJ2K: {
+#if ENCODER_NVENC
+        setAvcodecReaderPrm();
+        inputPrmNvJ2k = std::make_unique<RGYInputNvJ2kPrm>(inputInfoAVCuvid);
+        pInputPrm = inputPrmNvJ2k.get();
+        log->write(RGY_LOG_DEBUG, RGY_LOGT_IN, _T("nvj2k reader selected.\n"));
+        pFileReader.reset(new RGYInputNvJ2k());
+#else
+        return RGY_ERR_UNSUPPORTED;
+#endif
+        } break;
+    case RGY_INPUT_FMT_AVHW:
+    case RGY_INPUT_FMT_AVSW:
+    case RGY_INPUT_FMT_AVANY: {
+        setAvcodecReaderPrm();
         inputInfoAVCuvid.avswDecoder = inprm->avswDecoder;
         pInputPrm = &inputInfoAVCuvid;
         log->write(RGY_LOG_DEBUG, RGY_LOGT_IN, _T("avhw/sw reader selected.\n"));

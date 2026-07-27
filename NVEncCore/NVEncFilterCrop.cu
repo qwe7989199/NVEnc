@@ -1325,8 +1325,8 @@ __global__ void kernel_crop_rgb_yuv444(uint8_t *__restrict__ pDstY, uint8_t *__r
     struct __align__(sizeof(TypeOut) * 4) TypeOut4 {
         TypeOut x, y, z, w;
     };
-    // Allow the tail thread to write through pitch padding so the last valid pixels are not left stale.
-    if (x < dstWidth && y < dstHeight) {
+    // Use the vectorized path only when all 4 pixels are inside the visible width.
+    if (x + PIX_PER_THREAD - 1 < dstWidth && y < dstHeight) {
         TypeIn4 srcR = kernel_crop_load4<TypeIn, TypeIn4, aligned>(pSrcR + y * srcPitch + x * sizeof(TypeIn));
         TypeIn4 srcG = kernel_crop_load4<TypeIn, TypeIn4, aligned>(pSrcG + y * srcPitch + x * sizeof(TypeIn));
         TypeIn4 srcB = kernel_crop_load4<TypeIn, TypeIn4, aligned>(pSrcB + y * srcPitch + x * sizeof(TypeIn));
@@ -1475,8 +1475,8 @@ __global__ void kernel_crop_yuv444_rgb(
     struct __align__(sizeof(TypeOut) * 4) TypeOut4 {
         TypeOut x, y, z, w;
     };
-    // Allow the tail thread to write through pitch padding so the last valid pixels are not left stale.
-    if (x < dstWidth && y < dstHeight) {
+    // Use the vectorized path only when all 4 pixels are inside the visible width.
+    if (x + PIX_PER_THREAD - 1 < dstWidth && y < dstHeight) {
         TypeIn4 srcY = kernel_crop_load4<TypeIn, TypeIn4, aligned>(pSrcY + y * srcPitch + x * sizeof(TypeIn));
         TypeIn4 srcU = kernel_crop_load4<TypeIn, TypeIn4, aligned>(pSrcU + y * srcPitch + x * sizeof(TypeIn));
         TypeIn4 srcV = kernel_crop_load4<TypeIn, TypeIn4, aligned>(pSrcV + y * srcPitch + x * sizeof(TypeIn));
@@ -1612,12 +1612,16 @@ __global__ void kernel_crop_rgb3_yv12(uint8_t *__restrict__ pDstY, uint8_t *__re
         TypeOut *ptr_dst_u = (TypeOut *)(pDstU + y * dstPitchC + x * sizeof(TypeOut));
         TypeOut *ptr_dst_v = (TypeOut *)(pDstV + y * dstPitchC + x * sizeof(TypeOut));
         ptr_dst_y00[0] = scaleYFloatToPix<TypeOut, out_bit_depth>(yuv00.x);
-        ptr_dst_y01[0] = scaleYFloatToPix<TypeOut, out_bit_depth>(yuv01.x);
+        if (x0 + 1 < dstWidth) {
+            ptr_dst_y01[0] = scaleYFloatToPix<TypeOut, out_bit_depth>(yuv01.x);
+        }
         if (y0 + 1 < dstHeight) {
             TypeOut *ptr_dst_y10 = (TypeOut *)(pDstY + ((y0 + 1) * dstPitchY) + (x0 + 0) * sizeof(TypeOut));
             TypeOut *ptr_dst_y11 = (TypeOut *)(pDstY + ((y0 + 1) * dstPitchY) + (x0 + 1) * sizeof(TypeOut));
             ptr_dst_y10[0] = scaleYFloatToPix<TypeOut, out_bit_depth>(yuv10.x);
-            ptr_dst_y11[0] = scaleYFloatToPix<TypeOut, out_bit_depth>(yuv11.x);
+            if (x0 + 1 < dstWidth) {
+                ptr_dst_y11[0] = scaleYFloatToPix<TypeOut, out_bit_depth>(yuv11.x);
+            }
         }
         ptr_dst_u[0]   = scaleUVFloatToPix<TypeOut, out_bit_depth>((yuv00.y + yuv01.y + yuv10.y + yuv11.y) * 0.25f);
         ptr_dst_v[0]   = scaleUVFloatToPix<TypeOut, out_bit_depth>((yuv00.z + yuv01.z + yuv10.z + yuv11.z) * 0.25f);
@@ -1693,12 +1697,16 @@ __global__ void kernel_crop_rgb3_nv12(uint8_t *__restrict__ pDstY, uint8_t *__re
         TypeOut *ptr_dst_y01 = (TypeOut *)(pDstY + ((y0 + 0) * dstPitch) + (x0 + 1) * sizeof(TypeOut));
         TypeOut *ptr_dst_c = (TypeOut *)(pDstC + y * dstPitch + x * 2 * sizeof(TypeOut));
         ptr_dst_y00[0] = scaleYFloatToPix<TypeOut, out_bit_depth>(yuv00.x);
-        ptr_dst_y01[0] = scaleYFloatToPix<TypeOut, out_bit_depth>(yuv01.x);
+        if (x0 + 1 < dstWidth) {
+            ptr_dst_y01[0] = scaleYFloatToPix<TypeOut, out_bit_depth>(yuv01.x);
+        }
         if (y0 + 1 < dstHeight) {
             TypeOut *ptr_dst_y10 = (TypeOut *)(pDstY + ((y0 + 1) * dstPitch) + (x0 + 0) * sizeof(TypeOut));
             TypeOut *ptr_dst_y11 = (TypeOut *)(pDstY + ((y0 + 1) * dstPitch) + (x0 + 1) * sizeof(TypeOut));
             ptr_dst_y10[0] = scaleYFloatToPix<TypeOut, out_bit_depth>(yuv10.x);
-            ptr_dst_y11[0] = scaleYFloatToPix<TypeOut, out_bit_depth>(yuv11.x);
+            if (x0 + 1 < dstWidth) {
+                ptr_dst_y11[0] = scaleYFloatToPix<TypeOut, out_bit_depth>(yuv11.x);
+            }
         }
         ptr_dst_c[0]   = scaleUVFloatToPix<TypeOut, out_bit_depth>((yuv00.y + yuv01.y + yuv10.y + yuv11.y) * 0.25f);
         ptr_dst_c[1]   = scaleUVFloatToPix<TypeOut, out_bit_depth>((yuv00.z + yuv01.z + yuv10.z + yuv11.z) * 0.25f);
@@ -1768,12 +1776,16 @@ __global__ void kernel_crop_rgb4_yv12(uint8_t *__restrict__ pDstY, uint8_t *__re
         TypeOut *ptr_dst_u = (TypeOut *)(pDstU + y * dstPitchC + x * sizeof(TypeOut));
         TypeOut *ptr_dst_v = (TypeOut *)(pDstV + y * dstPitchC + x * sizeof(TypeOut));
         ptr_dst_y00[0] = scaleYFloatToPix<TypeOut, out_bit_depth>(yuv00.x);
-        ptr_dst_y01[0] = scaleYFloatToPix<TypeOut, out_bit_depth>(yuv01.x);
+        if (x0 + 1 < dstWidth) {
+            ptr_dst_y01[0] = scaleYFloatToPix<TypeOut, out_bit_depth>(yuv01.x);
+        }
         if (y0 + 1 < dstHeight) {
             TypeOut *ptr_dst_y10 = (TypeOut *)(pDstY + ((y0 + 1) * dstPitchY) + (x0 + 0) * sizeof(TypeOut));
             TypeOut *ptr_dst_y11 = (TypeOut *)(pDstY + ((y0 + 1) * dstPitchY) + (x0 + 1) * sizeof(TypeOut));
             ptr_dst_y10[0] = scaleYFloatToPix<TypeOut, out_bit_depth>(yuv10.x);
-            ptr_dst_y11[0] = scaleYFloatToPix<TypeOut, out_bit_depth>(yuv11.x);
+            if (x0 + 1 < dstWidth) {
+                ptr_dst_y11[0] = scaleYFloatToPix<TypeOut, out_bit_depth>(yuv11.x);
+            }
         }
         ptr_dst_u[0]   = scaleUVFloatToPix<TypeOut, out_bit_depth>((yuv00.y + yuv01.y + yuv10.y + yuv11.y) * 0.25f);
         ptr_dst_v[0]   = scaleUVFloatToPix<TypeOut, out_bit_depth>((yuv00.z + yuv01.z + yuv10.z + yuv11.z) * 0.25f);
@@ -1824,12 +1836,16 @@ __global__ void kernel_crop_rgb4_nv12(uint8_t *__restrict__ pDstY, uint8_t *__re
         TypeOut *ptr_dst_y01 = (TypeOut *)(pDstY + ((y0 + 0) * dstPitch) + (x0 + 1) * sizeof(TypeOut));
         TypeOut *ptr_dst_c = (TypeOut *)(pDstC + y * dstPitch + x * 2 * sizeof(TypeOut));
         ptr_dst_y00[0] = scaleYFloatToPix<TypeOut, out_bit_depth>(yuv00.x);
-        ptr_dst_y01[0] = scaleYFloatToPix<TypeOut, out_bit_depth>(yuv01.x);
+        if (x0 + 1 < dstWidth) {
+            ptr_dst_y01[0] = scaleYFloatToPix<TypeOut, out_bit_depth>(yuv01.x);
+        }
         if (y0 + 1 < dstHeight) {
             TypeOut *ptr_dst_y10 = (TypeOut *)(pDstY + ((y0 + 1) * dstPitch) + (x0 + 0) * sizeof(TypeOut));
             TypeOut *ptr_dst_y11 = (TypeOut *)(pDstY + ((y0 + 1) * dstPitch) + (x0 + 1) * sizeof(TypeOut));
             ptr_dst_y10[0] = scaleYFloatToPix<TypeOut, out_bit_depth>(yuv10.x);
-            ptr_dst_y11[0] = scaleYFloatToPix<TypeOut, out_bit_depth>(yuv11.x);
+            if (x0 + 1 < dstWidth) {
+                ptr_dst_y11[0] = scaleYFloatToPix<TypeOut, out_bit_depth>(yuv11.x);
+            }
         }
         ptr_dst_c[0]   = scaleUVFloatToPix<TypeOut, out_bit_depth>((yuv00.y + yuv01.y + yuv10.y + yuv11.y) * 0.25f);
         ptr_dst_c[1]   = scaleUVFloatToPix<TypeOut, out_bit_depth>((yuv00.z + yuv01.z + yuv10.z + yuv11.z) * 0.25f);
@@ -1931,32 +1947,31 @@ __global__ void kernel_crop_rgb_yv12(uint8_t *__restrict__ pDstY, uint8_t *__res
             }
         }
 
-        TypeOut4 *ptr_dst_y0 = (TypeOut4 *)(pDstY + y0 * dstPitchY + x0 * sizeof(TypeOut));
-        TypeOut4 dstY0;
-        dstY0.x = scaleYFloatToPix<TypeOut, out_bit_depth>(yuv[0][0].x);
-        dstY0.y = scaleYFloatToPix<TypeOut, out_bit_depth>(yuv[0][1].x);
-        dstY0.z = scaleYFloatToPix<TypeOut, out_bit_depth>(yuv[0][2].x);
-        dstY0.w = scaleYFloatToPix<TypeOut, out_bit_depth>(yuv[0][3].x);
-        kernel_crop_store4<TypeOut, TypeOut4, false>(ptr_dst_y0, dstY0);
+        TypeOut *ptr_dst_y0 = (TypeOut *)(pDstY + y0 * dstPitchY + x0 * sizeof(TypeOut));
+        #pragma unroll
+        for (int ix = 0; ix < 4; ix++) {
+            if (x0 + ix < dstWidth) {
+                ptr_dst_y0[ix] = scaleYFloatToPix<TypeOut, out_bit_depth>(yuv[0][ix].x);
+            }
+        }
         if (y0 + 1 < dstHeight) {
-            TypeOut4 *ptr_dst_y1 = (TypeOut4 *)(pDstY + (y0 + 1) * dstPitchY + x0 * sizeof(TypeOut));
-            TypeOut4 dstY1;
-            dstY1.x = scaleYFloatToPix<TypeOut, out_bit_depth>(yuv[1][0].x);
-            dstY1.y = scaleYFloatToPix<TypeOut, out_bit_depth>(yuv[1][1].x);
-            dstY1.z = scaleYFloatToPix<TypeOut, out_bit_depth>(yuv[1][2].x);
-            dstY1.w = scaleYFloatToPix<TypeOut, out_bit_depth>(yuv[1][3].x);
-            kernel_crop_store4<TypeOut, TypeOut4, false>(ptr_dst_y1, dstY1);
+            TypeOut *ptr_dst_y1 = (TypeOut *)(pDstY + (y0 + 1) * dstPitchY + x0 * sizeof(TypeOut));
+            #pragma unroll
+            for (int ix = 0; ix < 4; ix++) {
+                if (x0 + ix < dstWidth) {
+                    ptr_dst_y1[ix] = scaleYFloatToPix<TypeOut, out_bit_depth>(yuv[1][ix].x);
+                }
+            }
         }
 
         TypeOut2 *ptr_dst_u = (TypeOut2 *)(pDstU + y * dstPitchC + x * 2 * sizeof(TypeOut));
         TypeOut2 *ptr_dst_v = (TypeOut2 *)(pDstV + y * dstPitchC + x * 2 * sizeof(TypeOut));
-        TypeOut2 dstU, dstV;
-        dstU.x = scaleUVFloatToPix<TypeOut, out_bit_depth>((yuv[0][0].y + yuv[0][1].y + yuv[1][0].y + yuv[1][1].y) * 0.25f);
-        dstU.y = scaleUVFloatToPix<TypeOut, out_bit_depth>((yuv[0][2].y + yuv[0][3].y + yuv[1][2].y + yuv[1][3].y) * 0.25f);
-        dstV.x = scaleUVFloatToPix<TypeOut, out_bit_depth>((yuv[0][0].z + yuv[0][1].z + yuv[1][0].z + yuv[1][1].z) * 0.25f);
-        dstV.y = scaleUVFloatToPix<TypeOut, out_bit_depth>((yuv[0][2].z + yuv[0][3].z + yuv[1][2].z + yuv[1][3].z) * 0.25f);
-        kernel_crop_store2<TypeOut, TypeOut2, false>(ptr_dst_u, dstU);
-        kernel_crop_store2<TypeOut, TypeOut2, false>(ptr_dst_v, dstV);
+        ptr_dst_u->x = scaleUVFloatToPix<TypeOut, out_bit_depth>((yuv[0][0].y + yuv[0][1].y + yuv[1][0].y + yuv[1][1].y) * 0.25f);
+        ptr_dst_v->x = scaleUVFloatToPix<TypeOut, out_bit_depth>((yuv[0][0].z + yuv[0][1].z + yuv[1][0].z + yuv[1][1].z) * 0.25f);
+        if (x0 + 2 < dstWidth) {
+            ptr_dst_u->y = scaleUVFloatToPix<TypeOut, out_bit_depth>((yuv[0][2].y + yuv[0][3].y + yuv[1][2].y + yuv[1][3].y) * 0.25f);
+            ptr_dst_v->y = scaleUVFloatToPix<TypeOut, out_bit_depth>((yuv[0][2].z + yuv[0][3].z + yuv[1][2].z + yuv[1][3].z) * 0.25f);
+        }
     }
 }
 
@@ -2372,30 +2387,30 @@ __global__ void kernel_crop_rgb_nv12(uint8_t *__restrict__ pDstY, uint8_t *__res
             }
         }
 
-        TypeOut4 *ptr_dst_y0 = (TypeOut4 *)(pDstY + y0 * dstPitch + x0 * sizeof(TypeOut));
-        TypeOut4 dstY0;
-        dstY0.x = scaleYFloatToPix<TypeOut, out_bit_depth>(yuv[0][0].x);
-        dstY0.y = scaleYFloatToPix<TypeOut, out_bit_depth>(yuv[0][1].x);
-        dstY0.z = scaleYFloatToPix<TypeOut, out_bit_depth>(yuv[0][2].x);
-        dstY0.w = scaleYFloatToPix<TypeOut, out_bit_depth>(yuv[0][3].x);
-        kernel_crop_store4<TypeOut, TypeOut4, false>(ptr_dst_y0, dstY0);
+        TypeOut *ptr_dst_y0 = (TypeOut *)(pDstY + y0 * dstPitch + x0 * sizeof(TypeOut));
+        #pragma unroll
+        for (int ix = 0; ix < 4; ix++) {
+            if (x0 + ix < dstWidth) {
+                ptr_dst_y0[ix] = scaleYFloatToPix<TypeOut, out_bit_depth>(yuv[0][ix].x);
+            }
+        }
         if (y0 + 1 < dstHeight) {
-            TypeOut4 *ptr_dst_y1 = (TypeOut4 *)(pDstY + (y0 + 1) * dstPitch + x0 * sizeof(TypeOut));
-            TypeOut4 dstY1;
-            dstY1.x = scaleYFloatToPix<TypeOut, out_bit_depth>(yuv[1][0].x);
-            dstY1.y = scaleYFloatToPix<TypeOut, out_bit_depth>(yuv[1][1].x);
-            dstY1.z = scaleYFloatToPix<TypeOut, out_bit_depth>(yuv[1][2].x);
-            dstY1.w = scaleYFloatToPix<TypeOut, out_bit_depth>(yuv[1][3].x);
-            kernel_crop_store4<TypeOut, TypeOut4, false>(ptr_dst_y1, dstY1);
+            TypeOut *ptr_dst_y1 = (TypeOut *)(pDstY + (y0 + 1) * dstPitch + x0 * sizeof(TypeOut));
+            #pragma unroll
+            for (int ix = 0; ix < 4; ix++) {
+                if (x0 + ix < dstWidth) {
+                    ptr_dst_y1[ix] = scaleYFloatToPix<TypeOut, out_bit_depth>(yuv[1][ix].x);
+                }
+            }
         }
 
-        TypeOut4 *ptr_dst_c = (TypeOut4 *)(pDstC + y * dstPitch + x * 4 * sizeof(TypeOut));
-        TypeOut4 dstC;
-        dstC.x = scaleUVFloatToPix<TypeOut, out_bit_depth>((yuv[0][0].y + yuv[0][1].y + yuv[1][0].y + yuv[1][1].y) * 0.25f);
-        dstC.y = scaleUVFloatToPix<TypeOut, out_bit_depth>((yuv[0][0].z + yuv[0][1].z + yuv[1][0].z + yuv[1][1].z) * 0.25f);
-        dstC.z = scaleUVFloatToPix<TypeOut, out_bit_depth>((yuv[0][2].y + yuv[0][3].y + yuv[1][2].y + yuv[1][3].y) * 0.25f);
-        dstC.w = scaleUVFloatToPix<TypeOut, out_bit_depth>((yuv[0][2].z + yuv[0][3].z + yuv[1][2].z + yuv[1][3].z) * 0.25f);
-        kernel_crop_store4<TypeOut, TypeOut4, false>(ptr_dst_c, dstC);
+        TypeOut *ptr_dst_c = (TypeOut *)(pDstC + y * dstPitch + x * 4 * sizeof(TypeOut));
+        ptr_dst_c[0] = scaleUVFloatToPix<TypeOut, out_bit_depth>((yuv[0][0].y + yuv[0][1].y + yuv[1][0].y + yuv[1][1].y) * 0.25f);
+        ptr_dst_c[1] = scaleUVFloatToPix<TypeOut, out_bit_depth>((yuv[0][0].z + yuv[0][1].z + yuv[1][0].z + yuv[1][1].z) * 0.25f);
+        if (x0 + 2 < dstWidth) {
+            ptr_dst_c[2] = scaleUVFloatToPix<TypeOut, out_bit_depth>((yuv[0][2].y + yuv[0][3].y + yuv[1][2].y + yuv[1][3].y) * 0.25f);
+            ptr_dst_c[3] = scaleUVFloatToPix<TypeOut, out_bit_depth>((yuv[0][2].z + yuv[0][3].z + yuv[1][2].z + yuv[1][3].z) * 0.25f);
+        }
     }
 }
 
@@ -3306,7 +3321,7 @@ RGY_ERR NVEncFilterCspCrop::convertCspFromRGB(RGYFrameInfo *pOutputFrame, const 
         { RGY_CSP_2(RGY_CSP_BGR_16,  RGY_CSP_RGBA_FP16_P).i, crop_rgb_rgb_packed<__half, 16, uint16_t, 16> },
         { RGY_CSP_2(RGY_CSP_BGR_F32, RGY_CSP_RGB32).i,       crop_rgb_rgb_packed<uint8_t, 8, float,    32> },
         { RGY_CSP_2(RGY_CSP_BGR_F32, RGY_CSP_RGBA_FP16_P).i, crop_rgb_rgb_packed<__half, 16, float,    32> },
-        
+
         { RGY_CSP_2(RGY_CSP_RGB32,       RGY_CSP_RGB).i,     crop_rgb_packed_rgb<uint8_t,   8, uint8_t, 8> },
         { RGY_CSP_2(RGY_CSP_RGB32,       RGY_CSP_RGB_16).i,  crop_rgb_packed_rgb<uint16_t, 16, uint8_t, 8> },
         { RGY_CSP_2(RGY_CSP_RGB32,       RGY_CSP_RGB_F32).i, crop_rgb_packed_rgb<float,    32, uint8_t, 8> },

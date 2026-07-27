@@ -1,9 +1,9 @@
-// -----------------------------------------------------------------------------------------
+﻿// -----------------------------------------------------------------------------------------
 // QSVEnc/NVEnc by rigaya
 // -----------------------------------------------------------------------------------------
 // The MIT License
 //
-// Copyright (c) 2026
+// Copyright (c) 2026 rigaya
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -38,7 +38,7 @@
 
 class RGYInputCuprPrm : public RGYInputAvcodecPrm {
 public:
-    RGYInputCuprPrm(RGYInputAvcodecPrm base);
+    RGYInputCuprPrm(const RGYInputAvcodecPrm& base);
     virtual ~RGYInputCuprPrm() {};
     RGY_CUPR_DECODE_STRATEGY strategy;
 };
@@ -59,7 +59,8 @@ protected:
 private:
     RGY_ERR decodePacketToSurface(const AVPacket *pkt, CUFrameBuf *surface, cudaStream_t stream);
     RGY_ERR updateAutoStrategy(const ProResFrameInfo& frame, cudaStream_t stream);
-    RGY_ERR ensureDeviceBuffer(uint8_t **ptr, size_t *capacity, size_t required);
+    template<typename T>
+    RGY_ERR ensureDeviceBuffer(T **ptr, size_t *capacity, size_t required);
     void releaseDeviceBuffers();
 
     RGY_CSP m_outputCsp;
