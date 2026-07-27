@@ -312,6 +312,12 @@
     <ClCompile Include="NVEncFilterOnnx.cpp">
       <Filter>ソース ファイル</Filter>
     </ClCompile>
+    <ClCompile Include="NVEncFilterRifeOV.cpp">
+      <Filter>ソース ファイル</Filter>
+    </ClCompile>
+    <ClCompile Include="NVEncFilterStDeint.cpp">
+      <Filter>ソース ファイル</Filter>
+    </ClCompile>
     <ClCompile Include="rgy_model_registry.cpp">
       <Filter>ソース ファイル</Filter>
     </ClCompile>
@@ -626,6 +632,9 @@
     <ClInclude Include="NVEncFilterRtgmcSearchPrefilter.h">
       <Filter>ヘッダー ファイル</Filter>
     </ClInclude>
+    <ClInclude Include="NVEncFilterRtgmcShimmerRepair.cuh">
+      <Filter>ヘッダー ファイル</Filter>
+    </ClInclude>
     <ClInclude Include="NVEncFilterRtgmcShimmerRepair.h">
       <Filter>ヘッダー ファイル</Filter>
     </ClInclude>
@@ -710,6 +719,8 @@
     <ClInclude Include="NVEncFilterSmooth.h">
       <Filter>ヘッダー ファイル</Filter>
     </ClInclude>
+    <ClInclude Include="NVEncFilterLensCorrection.h" />
+    <ClInclude Include="NVEncFilterV360.h" />
     <ClInclude Include="NVEncFilterTransform.h">
       <Filter>ヘッダー ファイル</Filter>
     </ClInclude>
@@ -816,6 +827,12 @@
       <Filter>ヘッダー ファイル</Filter>
     </ClInclude>
     <ClInclude Include="NVEncFilterOnnx.h">
+      <Filter>ヘッダー ファイル</Filter>
+    </ClInclude>
+    <ClInclude Include="NVEncFilterRifeOV.h">
+      <Filter>ヘッダー ファイル</Filter>
+    </ClInclude>
+    <ClInclude Include="NVEncFilterStDeint.h">
       <Filter>ヘッダー ファイル</Filter>
     </ClInclude>
     <ClInclude Include="rgy_model_registry.h">
@@ -988,6 +1005,9 @@
     <CudaCompile Include="NVEncFilterBwdif.cu">
       <Filter>ソース ファイル</Filter>
     </CudaCompile>
+    <CudaCompile Include="NVEncFilterStDeint.cu">
+      <Filter>ソース ファイル</Filter>
+    </CudaCompile>
     <CudaCompile Include="NVEncFilterIvtc.cu">
       <Filter>ソース ファイル</Filter>
     </CudaCompile>
@@ -1003,6 +1023,8 @@
     <CudaCompile Include="NVEncFilterSmooth.cu">
       <Filter>ソース ファイル</Filter>
     </CudaCompile>
+    <CudaCompile Include="NVEncFilterLensCorrection.cu" />
+    <CudaCompile Include="NVEncFilterV360.cu" />
     <CudaCompile Include="NVEncFilterTransform.cu">
       <Filter>ソース ファイル</Filter>
     </CudaCompile>
@@ -1105,7 +1127,19 @@
     <CudaCompile Include="NVEncFilterRtgmcSearchPrefilterU16TRP.cu">
       <Filter>ソース ファイル</Filter>
     </CudaCompile>
-    <CudaCompile Include="NVEncFilterRtgmcShimmerRepair.cu">
+    <ClCompile Include="NVEncFilterRtgmcShimmerRepair.cpp">
+      <Filter>ソース ファイル</Filter>
+    </ClCompile>
+    <CudaCompile Include="NVEncFilterRtgmcShimmerRepairApplyU8.cu">
+      <Filter>ソース ファイル</Filter>
+    </CudaCompile>
+    <CudaCompile Include="NVEncFilterRtgmcShimmerRepairApplyU16.cu">
+      <Filter>ソース ファイル</Filter>
+    </CudaCompile>
+    <CudaCompile Include="NVEncFilterRtgmcShimmerRepairFusedU8.cu">
+      <Filter>ソース ファイル</Filter>
+    </CudaCompile>
+    <CudaCompile Include="NVEncFilterRtgmcShimmerRepairFusedU16.cu">
       <Filter>ソース ファイル</Filter>
     </CudaCompile>
     <CudaCompile Include="NVEncFilterDegrain.cu">

@@ -214,6 +214,65 @@ NVIDIA グラフィックドライバ 551.23
 今後の更新で設定ファイルの互換性がなくなるかもしれません。
 
 【メモ】
+2026.07.25 (9.26)
+- --vpp-lenscorrectionと--vpp-v360を追加。
+- --vpp-onnxにマスク入力とマルチフレーム(時系列)対応を追加。
+- --vpp-libplacebo-shaderにcustom指定を追加。
+- --vpp-onnxのfp16指定がTensorRTでfp32になる問題を修正。
+- --vpp-kfm/--vpp-degrainを高速化。
+- --vpp-rtgmcの精度・動作を修正し、高速化。
+- --vpp-rtgmcの10bitでのオーバーフローを修正。
+- --vship-ssimulacra2の統計情報をログに追加。
+- TensorRTキャッシュを実行環境・入力条件ごとに分離。
+
+2026.07.18 (9.25)
+- Windowsの名前付きパイプに対応。 ( #785 )
+- --vpp-kfmの精度を改善。
+- --vpp-degrain/--vpp-rtgmcの処理を、キャッシュのゼロコピー参照化と動き探索の並列化により高速化。
+- libvmafを更新し、enable_floatを有効に。 ( #783 )
+- libvmafのCPU自動fallbackを追加。
+- --vpp-libplacebo-tonemappingのuse_doviをbool文字列で指定した際に誤って失敗扱いになる問題を修正。
+- --audio-source/--sub-sourceのinput_optで末尾トークンの範囲外読み取りを修正。
+- 潜在的な不具合を修正。
+
+2026.07.11 (9.24)
+- 長時間処理時の--vpp-kfmを高速化。
+- --vpp-fft3d フィルタの時間軸オプションを拡張。
+- ONNX Runtime読み込み失敗時の診断を改善。
+- --vmaf のCUDA版で生じるnanを回避。( #781 )
+- LinuxのVMAF CUDA対応漏れを修正。( #781 )
+- Linuxでlibvshipのビルドを有効に。
+- --vpp-onnxにSDR to HDRモデル対応を追加。
+- 存在しないVMAF jsonモデル指定のエラーを明確化。( #783 )
+- OpenVINO RIFEフレーム補間フィルタ --vpp-rife-ov を追加。
+- --vpp-tweak にcoringとhue範囲指定を追加。
+- --vpp-curves に補間方式を追加しall指定を修正。
+- --vpp-hqdering に詳細パラメータを追加。
+- --vpp-cas にchroma指定を追加。
+- --vpp-descale に有効ソースサイズ指定を追加。
+- --vpp-mpdecimate にkeep指定を追加し状態管理を修正。
+- --vpp-ivtc に判定パラメータを追加。
+- --vpp-nnedi にplanes指定を追加。
+- --vpp-knn の時間方向半径を取り込み、時間方向処理を整理。
+- yuv444→y410の変換を修正。
+- --vpp-msmooth のmask出力を修正。
+- --vpp-vinverse のchroma処理を修正。
+- YadifのcopyFrameAsyncエラーを伝播するよう修正。
+- Nvvfx出力cropの高さ判定を修正。
+- alpha入力バッファの幅設定を修正。
+- smooth QP tableの参照座標clampを修正。
+- Anime4K spline36の一次項を修正。
+- AFS mie_spot8の4要素目の参照元を修正。
+- colorspace LUT3Dのgreen軸scale出力を修正。
+- libplaceboのradius警告の引数不足を修正。
+- libplacebo debandのgrain適用先を修正。
+- delogoの2点最小二乗の切片計算を修正。
+- decimateの差分計算グリッド高さを修正。
+- decombの縞判定グリッドのY方向strideを修正。
+- RGBからYUV420変換のクロマ参照行を修正。
+- denoiseフィルタの修正を適用。
+- Convolution3Dのしきい値指定を修正。
+
 2026.07.04 (9.23)
 - libvmafのCUDA版に対応。
 - --vpp-finedehalo の高精度化。

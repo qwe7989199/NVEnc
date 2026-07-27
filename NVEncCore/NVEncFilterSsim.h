@@ -34,6 +34,7 @@
 #include <memory>
 #include <thread>
 #include <mutex>
+#include <vector>
 #include "rgy_osdep.h"
 #include "rgy_event.h"
 #include "rgy_libvmaf.h"
@@ -84,6 +85,7 @@ struct NVEncFilterVMAFData {
     std::atomic<int> procIndex;
     int error;
     double score;
+    uint32_t nonFiniteFrames;
     std::thread thread;
 
     void thread_fin(bool abortThread = true);
@@ -102,6 +104,7 @@ struct NVEncFilterVshipData {
     // SSIMU2スコア蓄積
     double ssimu2Total;
     int ssimu2Frames;
+    std::vector<double> ssimu2Scores;
     // Butteraugliスコア蓄積
     double butteraugliTotalNormQ;
     double butteraugliTotalNorm3;

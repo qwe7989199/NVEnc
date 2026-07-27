@@ -226,6 +226,10 @@ protected:
         KFM_FRAME_24 = 3,
         KFM_FRAME_UCF = 4,
     };
+    enum KfmCleanSuperMode {
+        KFM_CLEAN_SUPER_24 = 24,
+        KFM_CLEAN_SUPER_30 = 30,
+    };
     enum KfmUcf60Flag {
         KFM_UCF60_NONE = 0,
         KFM_UCF60_NR = 1,
@@ -422,6 +426,8 @@ protected:
     void finalizeAnalyzerResults(VppKfmTiming timing);
     std::vector<RGYKFM::KFMResult> analyzerResultsSnapshot(bool mark60p) const;
     void appendAnalyzerResults(size_t resultCount, bool dump, bool mark60p);
+    void logKfmProfileStats();
+    bool deriveSwitchTimingAt(KfmSwitchTiming& timing, int n60, int total60) const;
     std::vector<KfmSwitchTiming> deriveSwitchTimings(int total60) const;
     int64_t sourceFrameDuration(const KfmCachedSource *source) const;
     struct KfmSourceSlot;
@@ -470,6 +476,8 @@ protected:
         cudaStream_t stream, const std::vector<RGYCudaEvent> &wait_events, RGYCudaEvent *event);
     RGY_ERR renderSuper30(RGYFrameInfo *pOutputFrame, int frame30Index, bool drain,
         cudaStream_t stream, const std::vector<RGYCudaEvent> &wait_events, RGYCudaEvent *event);
+    RGY_ERR getCachedCleanSuper(KfmCleanSuperMode mode, int frameIndex, RGYFrameInfo *pFallbackFrame, RGYFrameInfo **ppOutputFrame,
+        bool drain, cudaStream_t stream, const std::vector<RGYCudaEvent> &wait_events, RGYCudaEvent *event);
     RGY_ERR removeCombeFields(RGYFrameInfo *pOutputFrame, const RGYFrameInfo *pDeintFrame, const RGYFrameInfo *pTelecineSuperFrame,
         int firstField, int fieldCount, int stageFrameIndex, const char *stageName,
         cudaStream_t stream, const std::vector<RGYCudaEvent> &wait_events, RGYCudaEvent *event);
@@ -479,8 +487,10 @@ protected:
         const RGYFrameInfo *pTelecineSuperFrame, const TCHAR *stageLabel);
     RGY_ERR renderMaskBranch(RGYFrameInfo *pSwitchFlagFrame, RGYFrameInfo *pContainsCombeFrame, RGYFrameInfo *pCombeMaskFrame,
         const RGYFrameInfo *pTelecineSuperPrevFrame, const RGYFrameInfo *pTelecineSuperFrame, const RGYFrameInfo *pTelecineSuperNextFrame,
-        const char *switchFlagStage, const char *containsCombeStage, const char *combeMaskStage,
+        const char *switchFlagStage, const char *containsCombeStage, const char *combeMaskStage, bool generateCombeMask,
         cudaStream_t stream, const std::vector<RGYCudaEvent> &wait_events, RGYCudaEvent *event, KfmContainsCombeReadback *containsCombeReadback = nullptr);
+    RGY_ERR renderCombeMask(RGYFrameInfo *pCombeMaskFrame, const RGYFrameInfo *pSwitchFlagFrame, const RGYFrameInfo *pTelecineSuperFrame,
+        const char *combeMaskStage, cudaStream_t stream, const std::vector<RGYCudaEvent> &wait_events, RGYCudaEvent *event);
     RGY_ERR resolveContainsCombeCount(KfmContainsCombeReadback& readback, uint32_t *containsCombeCount);
     RGY_ERR patchCombe(RGYFrameInfo *pOutputFrame, const RGYFrameInfo *pBaseFrame, const RGYFrameInfo *pPatchFrame, const RGYFrameInfo *pMaskFrame,
         int frameIndex, const char *stageName, cudaStream_t stream, const std::vector<RGYCudaEvent> &wait_events, RGYCudaEvent *event);
@@ -575,6 +585,58 @@ protected:
         KfmPendingVfrOutput() : frame(), event() {};
     };
 
+    struct KfmCleanSuperCacheKey {
+        KfmCleanSuperMode mode;
+        int frameIndex;
+        int firstField;
+        int lastField;
+        int propSourceIndex;
+        int width;
+        int height;
+        RGY_CSP csp;
+
+        KfmCleanSuperCacheKey() : mode(KFM_CLEAN_SUPER_24), frameIndex(-1), firstField(-1), lastField(-1), propSourceIndex(-1), width(0), height(0), csp(RGY_CSP_NA) {};
+        bool operator==(const KfmCleanSuperCacheKey& other) const {
+            return mode == other.mode && frameIndex == other.frameIndex
+                && firstField == other.firstField && lastField == other.lastField
+                && propSourceIndex == other.propSourceIndex
+                && width == other.width && height == other.height && csp == other.csp;
+        }
+    };
+
+    struct KfmCleanSuperCacheEntry {
+        KfmCleanSuperCacheKey key;
+        std::shared_ptr<CUFrameBuf> frame;
+        RGYCudaEvent readyEvent;
+        uint64_t lastUsed;
+
+        KfmCleanSuperCacheEntry() : key(), frame(), readyEvent(), lastUsed(0) {};
+    };
+
+    struct KfmVfrRunStats {
+        int64_t inputCalls, drainCalls, inputZeroOut, inputSingleOut, inputMultiOut, drainZeroOut, drainSingleOut, drainMultiOut;
+        int maxInputOut, maxDrainOut, maxPendingOutputs, maxOutputLag60, maxSourceFrames, maxSourceCacheSize, maxAnalyzerResults, maxTimingCount;
+        int64_t noTimingBreaks, tailHoldBreaks, moreData24RenderBreaks, moreData24SuperBreaks, moreData24NextSuperBreaks, frontier24Breaks;
+        int64_t moreData24PatchDeintBreaks, moreData60EnsureBreaks, missingDeint60Breaks, sourceMissing30Breaks, moreData30PatchDeintBreaks, missing30PatchDeintBreaks, sourceMissingFallbackBreaks, zeroOutNoPendingCalls;
+        KfmVfrRunStats() : inputCalls(0), drainCalls(0), inputZeroOut(0), inputSingleOut(0), inputMultiOut(0), drainZeroOut(0), drainSingleOut(0), drainMultiOut(0), maxInputOut(0), maxDrainOut(0), maxPendingOutputs(0), maxOutputLag60(0), maxSourceFrames(0), maxSourceCacheSize(0), maxAnalyzerResults(0), maxTimingCount(0), noTimingBreaks(0), tailHoldBreaks(0), moreData24RenderBreaks(0), moreData24SuperBreaks(0), moreData24NextSuperBreaks(0), frontier24Breaks(0), moreData24PatchDeintBreaks(0), moreData60EnsureBreaks(0), missingDeint60Breaks(0), sourceMissing30Breaks(0), moreData30PatchDeintBreaks(0), missing30PatchDeintBreaks(0), sourceMissingFallbackBreaks(0), zeroOutNoPendingCalls(0) {};
+    };
+    struct KfmProfileCounter {
+        int64_t calls, totalNs, maxNs;
+        int maxItems;
+        KfmProfileCounter() : calls(0), totalNs(0), maxNs(0), maxItems(0) {};
+        void add(int64_t elapsedNs, int items = 0) { calls++; totalNs += elapsedNs; if (elapsedNs > maxNs) { maxNs = elapsedNs; maxItems = items; } }
+    };
+    struct KfmProfileStats {
+        bool enabled;
+        KfmProfileCounter submitFMCounts, readbackFMCounts, analyzeCpu, analyzerTrailing, appendAnalyzer, snapshotCopy, snapshotMark60p, appendWrite, writeFinal, deriveTimings, emitPending, vfrScheduler;
+        int64_t cleanSuperCacheHits;
+        int64_t cleanSuperCacheMisses;
+        int64_t cleanSuperCacheAvoidedFields;
+        int64_t fullCombeMaskGenerated;
+        int64_t fullCombeMaskAvoided;
+        KfmProfileStats() : enabled(false), cleanSuperCacheHits(0), cleanSuperCacheMisses(0), cleanSuperCacheAvoidedFields(0), fullCombeMaskGenerated(0), fullCombeMaskAvoided(0) {};
+    };
+
     std::unique_ptr<NVEncFilterRtgmc> m_rtgmc;
     std::unique_ptr<NVEncFilterRtgmc> m_deint60Rtgmc;
     std::unique_ptr<NVEncFilterRtgmc> m_before60Rtgmc;
@@ -600,9 +662,13 @@ protected:
     std::array<std::unique_ptr<CUMemBuf>, 2> m_analyzeFlags;
     std::deque<KfmPendingFMCount> m_pendingFMCounts;
     std::deque<KfmPendingVfrOutput> m_pendingVfrOutputs;
+    KfmVfrRunStats m_vfrRunStats;
+    mutable KfmProfileStats m_kfmProfile;
     std::array<std::unique_ptr<CUMemBuf>, 2> m_telecineSuperRaw;
     std::array<std::unique_ptr<CUFrameBuf>, 2> m_telecineSuperFrames;
     std::array<std::unique_ptr<CUFrameBuf>, 2> m_telecineSuperNeighborFrames;
+    std::deque<KfmCleanSuperCacheEntry> m_cleanSuperCache;
+    uint64_t m_cleanSuperCacheGeneration;
     std::array<std::unique_ptr<CUFrameBuf>, 4> m_switchFlagFrames;
     std::array<std::unique_ptr<CUFrameBuf>, 4> m_containsCombeFrames;
     std::array<std::unique_ptr<CUFrameBuf>, 4> m_combeMaskFrames;
@@ -626,6 +692,8 @@ protected:
     std::string m_stageDumpDir;
     RGYKFM::KFMResult m_lastAnalyzeResult;
     std::vector<RGYKFM::KFMResult> m_analyzerOutputResults;
+    size_t m_analyzerMark60pCommitted;
+    bool m_analyzerMark60pState;
     bool m_hasLastAnalyzeResult;
     bool m_analyzerFinalized;
     bool m_switchTimingDumped;

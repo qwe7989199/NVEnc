@@ -29,9 +29,9 @@
 #ifndef __RGY_CONFIG_H__
 #define __RGY_CONFIG_H__
 
-#define VER_FILEVERSION             0,9,23,0
-#define VER_STR_FILEVERSION          "9.23"
-#define VER_STR_FILEVERSION_TCHAR _T("9.23")
+#define VER_FILEVERSION             0,9,26,0
+#define VER_STR_FILEVERSION          "9.26"
+#define VER_STR_FILEVERSION_TCHAR _T("9.26")
 
 #ifdef _M_IX86
 #define BUILD_ARCH_STR _T("x86")
@@ -65,6 +65,8 @@ const char *get_encoder_version();
 #define ENABLE_NVENC_SDK_TUNE 1
 
 #define ENABLE_NVTX 0
+#define ENABLE_OPENVINO 0
+#define ENABLE_OPENCL 0
 
 #define GPU_VENDOR "NVIDIA"
 
@@ -73,7 +75,6 @@ const char *get_encoder_version();
 
 #if defined(_WIN32) || defined(_WIN64)
 #define NV_DRIVER_VER_MIN 452039
-#define ENABLE_OPENCL 1
 #define ENABLE_CPP_REGEX 1
 #define ENABLE_DTL 1
 #define ENABLE_PERF_COUNTER 1

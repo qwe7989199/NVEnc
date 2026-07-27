@@ -456,7 +456,7 @@ int main(void) {
 '''
     have_vmaf_cuda_link = cpp.links(
       vmaf_cuda_link_code,
-      dependencies: [vmaf_compile_dep, vmaf_link_dep],
+      dependencies: [vmaf_compile_dep, vmaf_link_dep, cuda_driver_dep, dl_dep],
       args: get_option('cpp_args'),
     )
   endif
@@ -576,6 +576,15 @@ int main(void) {
       endif
     endif
   endforeach
+  if not have_libvship_headers
+    have_libvship_headers = cpp.compiles(
+      libvship_headers_code,
+      args: get_option('cpp_args'),
+    )
+    if have_libvship_headers
+      message('Using Vship headers from cpp_args')
+    endif
+  endif
   if enable_libvship_option == 'enabled' and not have_libvship_headers
     error('Vship headers not found (VshipAPI.h)')
   endif
@@ -910,6 +919,9 @@ nvenccore_sources = files(
   'NVEncCore/NVEncFilterNVOFFRUC.cpp',
   'NVEncCore/NVEncFilterNvvfx.cpp',
   'NVEncCore/NVEncFilterOnnx.cpp',
+  'NVEncCore/NVEncFilterRifeOV.cpp',
+  'NVEncCore/NVEncFilterStDeint.cpp',
+  'NVEncCore/NVEncFilterRtgmcShimmerRepair.cpp',
   'NVEncCore/NVEncFilterOverlay.cpp',
   'NVEncCore/NVEncFilterPad.cpp',
   'NVEncCore/NVEncFilterParam.cpp',
@@ -1014,6 +1026,7 @@ cuda_sources = files(
   'NVEncCore/NVEncFilterAfsMerge.cu',
   'NVEncCore/NVEncFilterAfsSynthesize.cu',
   'NVEncCore/NVEncFilterBwdif.cu',
+  'NVEncCore/NVEncFilterStDeint.cu',
   'NVEncCore/NVEncFilterIvtc.cu',
   'NVEncCore/NVEncFilterAnime4k.cu',
   'NVEncCore/NVEncFilterKfm.cu',
@@ -1075,12 +1088,17 @@ cuda_sources = files(
   'NVEncCore/NVEncFilterRtgmcSearchPrefilterU8TRP.cu',
   'NVEncCore/NVEncFilterRtgmcSearchPrefilterU16TR0.cu',
   'NVEncCore/NVEncFilterRtgmcSearchPrefilterU16TRP.cu',
-  'NVEncCore/NVEncFilterRtgmcShimmerRepair.cu',
+  'NVEncCore/NVEncFilterRtgmcShimmerRepairApplyU8.cu',
+  'NVEncCore/NVEncFilterRtgmcShimmerRepairApplyU16.cu',
+  'NVEncCore/NVEncFilterRtgmcShimmerRepairFusedU8.cu',
+  'NVEncCore/NVEncFilterRtgmcShimmerRepairFusedU16.cu',
   'NVEncCore/NVEncFilterSmooth.cu',
   'NVEncCore/NVEncFilterMsmooth.cu',
   'NVEncCore/NVEncFilterSsim.cu',
   'NVEncCore/NVEncFilterSubburn.cu',
   'NVEncCore/NVEncFilterTransform.cu',
+  'NVEncCore/NVEncFilterLensCorrection.cu',
+  'NVEncCore/NVEncFilterV360.cu',
   'NVEncCore/NVEncFilterSoftLight.cu',
   'NVEncCore/NVEncFilterTweak.cu',
   'NVEncCore/NVEncFilterUnsharp.cu',
@@ -1257,6 +1275,7 @@ summary({
   'libplacebo static': have_libplacebo_headers and libplacebo_static and have_libplacebo_link,
   'VMAF': have_vmaf_headers,
   'VMAF static': have_vmaf_headers and libvmaf_static and have_vmaf_link,
+  'VMAF CUDA': have_vmaf_headers and libvmaf_static and have_vmaf_link and have_vmaf_cuda_link,
   'libvship': have_libvship_headers,
   'ONNX Runtime': have_onnxruntime_headers,
   'Vulkan': have_vulkan_headers,

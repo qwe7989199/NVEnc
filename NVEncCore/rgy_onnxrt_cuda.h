@@ -31,6 +31,8 @@
 
 #include <memory>
 #include <cstdint>
+#include <vector>
+#include <cuda_runtime_api.h>
 #include "rgy_err.h"
 
 // Set ENABLE_ONNXRUNTIME to 1 by the build (preprocessor define) when NVEnc is built with the ONNX
@@ -73,14 +75,30 @@ public:
     // warms / builds the engine). On failure errMessage carries the ONNX Runtime
     // error text. If TensorRT is requested but unavailable, falls back to CUDA.
     RGY_ERR init(const tstring &modelPath, const int deviceID, const RGYOnnxRTProvider provider,
-                 const int height, const int width, tstring &errMessage);
+                 const int height, const int width, tstring &errMessage,
+                 cudaStream_t userComputeStream = nullptr,
+                 const tstring &precision = _T("fp32"),
+                 const tstring &cacheDir = tstring());
 
     // Synchronous inference. in points to inChannels()*inHeight()*inWidth() floats
     // (CHW); out receives outChannels()*outHeight()*outWidth() floats (CHW).
     // Blocking; in only needs to stay valid for the call.
     RGY_ERR infer(const float *in, float *out);
 
+    // 2入力以上のNCHWモデルをホストバッファで実行する。
+    RGY_ERR inferMulti(const std::vector<const float *> &inputs, const std::vector<float *> &outputs);
+
+    // CUDAデバイス上のCHW floatバッファを直接入出力に束縛する。
+    // init()でuserComputeStreamを指定して初期化できた場合のみ利用できる。
+    RGY_ERR inferDevice(const float *inDevice, float *outDevice);
+    bool deviceIOAvailable() const;
+
     int inChannels()  const;
+    int inputCount() const;
+    int inputChannels(int index) const;
+    int inputHeight(int index) const;
+    int inputWidth(int index) const;
+    int outputCount() const;
     int inHeight()    const;
     int inWidth()     const;
     int outChannels() const;
@@ -92,12 +110,17 @@ public:
     tstring inferencePrecision() const; // "f32"
     tstring providerName() const;       // "cuda" or "tensorrt" (the EP actually used)
     tstring lastError() const;
+    tstring cacheInfo() const;          // engine cache state ("" when caching is off)
 
     static bool available() { return ENABLE_ONNXRUNTIME != 0; }
 
 private:
     RGYOnnxRTCUDA(const RGYOnnxRTCUDA &) = delete;
     void operator=(const RGYOnnxRTCUDA &) = delete;
+
+    RGY_ERR initImpl(const tstring &modelPath, const int deviceID, const RGYOnnxRTProvider provider,
+                     const int height, const int width, tstring &errMessage,
+                     cudaStream_t userComputeStream, const tstring &precision, const tstring &cacheDir);
 
     class Impl;
     std::unique_ptr<Impl> m_impl;

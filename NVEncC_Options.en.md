@@ -273,6 +273,8 @@
   - [--vpp-anime4k-shader \[\<param1\>=\<value1\>\]\[,\<param2\>=\<value2\>\],...](#--vpp-anime4k-shader-param1value1param2value2)
   - [--vpp-onnx \[\<param1\>=\<value1\>\]\[,\<param2\>=\<value2\>\],...](#--vpp-onnx-param1value1param2value2)
   - [--vpp-onnx-model-dir \<string\>](#--vpp-onnx-model-dir-string)
+  - [--vpp-onnx-cache-dir \<string\>](#--vpp-onnx-cache-dir-string)
+  - [--vpp-rife-ov \[\<param1\>=\<value1\>\]\[,\<param2\>=\<value2\>\],...](#--vpp-rife-ov-param1value1param2value2)
   - [--vpp-perf-monitor](#--vpp-perf-monitor)
   - [--vpp-nvvfx-model-dir \<string\>](#--vpp-nvvfx-model-dir-string)
 - [Other Options](#other-options)
@@ -1113,8 +1115,23 @@ and is highly likely to become a bottleneck and result in poor encoding performa
   - model=&lt;string&gt;  
     Set internal model version of libvmaf, or external model file path. Default is internal "vmaf_v0.6.1".
 
-    When using model file, download json format model files from  
-    [link](https://github.com/Netflix/vmaf/tree/master/model) and set the path by this option.
+    Built-in model names available in the bundled libvmaf 3.2.0 build:
+    - `vmaf_v0.6.1`
+    - `vmaf_b_v0.6.3`
+    - `vmaf_v0.6.1neg`
+    - `vmaf_4k_v0.6.1`
+    - `vmaf_4k_v0.6.1neg`
+    - `vmaf_v1.0.16_3d0h`
+    - `vmaf_v1.0.16_3d0h_2160`
+    - `vmaf_v1.0.16_5d0h`
+    - `vmaf_v1.0.16_1d5h_2160`
+    - `vmaf_v1.0.16_hfr_3d0h`
+    - `vmaf_v1.0.16_hfr_3d0h_2160`
+    - `vmaf_v1.0.16_hfr_5d0h`
+    - `vmaf_v1.0.16_hfr_1d5h_2160`
+
+    To use an external model file, download a json format model file from  
+    [link](https://github.com/Netflix/vmaf/tree/master/model) and set the existing `.json` file path by this option.
   - threads=&lt;int&gt;  (default: 0)  
     CPU thread(s) to calculate vmaf score. Default is to use all physical cores.
   - subsample=&lt;int&gt;  (default: 1)  
@@ -1127,11 +1144,13 @@ and is highly likely to become a bottleneck and result in poor encoding performa
     
 - Examples
   ```
-  Example: --vmaf model=vmaf_v0.6.1.json
+  Example: --vmaf model=vmaf_v0.6.1
+  Example: --vmaf model=/path/to/vmaf_4k_v0.6.1neg.json
   ```
 
 ### --vship-ssimulacra2
 Calculate SSIMULACRA2 score using Vship library (GPU accelerated).
+At the end, the log also shows the standard deviation, median, 5th percentile, 95th percentile, minimum, and maximum in the same line as the average score.
 
 ### --vship-butteraugli [&lt;param1&gt;=&lt;value1&gt;[,&lt;param2&gt;=&lt;value2&gt;]...]
 Calculate Butteraugli score using Vship library (GPU accelerated).
@@ -1904,6 +1923,8 @@ Vpp filters will be applied in fixed order, regardless of the order in the comma
 - [--vpp-anime4k-shader](#--vpp-anime4k-shader-param1value1param2value2)
 - [--vpp-onnx](#--vpp-onnx-param1value1param2value2)
 - [--vpp-onnx-model-dir](#--vpp-onnx-model-dir-string)
+- [--vpp-onnx-cache-dir](#--vpp-onnx-cache-dir-string)
+- [--vpp-rife-ov](#--vpp-rife-ov-param1value1param2value2)
 
 ### --vpp-colorspace [&lt;param1&gt;=&lt;value1&gt;][,&lt;param2&gt;=&lt;value2&gt;],...
 Converts colorspace of the video. Available on x64 version.  
@@ -2330,7 +2351,9 @@ nnedi deinterlacer.
 
 - **parameters**
 
-  - field=&lt;string&gt;  
+  - planes=&lt;string&gt;
+    Target planes. `all`, or `:`-separated list of `y`, `u`, `v`. Default: `all`.
+  - field=&lt;string&gt;
     Target field selector. `bob`, `auto` (default), `top`, `bottom`, `bob_tff`, `bob_bff`.
   - nsize=&lt;string&gt;  
     Neighborhood size. `8x6`, `16x6`, `32x6`, `48x6`, `8x4`, `16x4`, `32x4` (default).
@@ -2601,9 +2624,17 @@ Inverse telecine for soft-telecine / hard-telecine sources.
   - back=&lt;int&gt;  
     When to test match=P. `0` = always test, `1` = only when C looks combed.
   - y0=&lt;int&gt;
-  - y1=&lt;int&gt;  
+  - y1=&lt;int&gt;
     Exclusion band for the combing metric. Useful for burned-in subtitles.
-  - cadlock=&lt;auto|on|off&gt;  
+  - nt=&lt;int&gt;  (default: 10)
+    Match-metric noise tolerance in 8-bit scale.
+  - cthresh=&lt;int&gt;  (default: 4)
+    Per-pixel comb threshold used in match scoring in 8-bit scale.
+  - combpel=&lt;int&gt;  (default: 8)
+    Number of combed pixels per 32x8 block before the block is counted as combed.
+  - scthresh=&lt;float&gt;  (default: 0.0)
+    Scene-change threshold as a fraction of max SAD. `0.0` uses the adaptive threshold.
+  - cadlock=&lt;auto|on|off&gt;
     Enable cadence pattern lock. `auto` enables it when `guide>=1`.
   - gthresh=&lt;int&gt;  
     Tolerance for cadence-predicted match override. `0 - 100`. `0` disables override.
@@ -2653,11 +2684,13 @@ Please note that [--avsync](./NVEncC_Options.en.md#--avsync-string) vfr is autom
   - lo=&lt;int&gt;  (default: 320, 8x8x5)  
   - frac=&lt;float&gt;  (default: 0.33)  
     The frame might be dropped if the fraction of 8x8 blocks with difference smaller than "lo" is more than "frac".
-  - max=&lt;int&gt;  (default: 0)  
-    Max consecutive frames which can be dropped (if positive).  
+  - max=&lt;int&gt;  (default: 0)
+    Max consecutive frames which can be dropped (if positive).
     Min interval between dropped frames (if negative).
-    
-  - log=&lt;bool&gt;  
+  - keep=&lt;int&gt;  (default: 0)
+    Number of similar consecutive frames to keep before starting to drop.
+
+  - log=&lt;bool&gt;
     output log file. (default: off)
 
 ### --vpp-select-every &lt;int&gt;[,&lt;param1&gt;=&lt;int&gt;]
@@ -2687,6 +2720,30 @@ Rotate video. 90, 180, 270 degrees is allowed.
   - flip_y=&lt;bool&gt;
 
   - transpose=&lt;bool&gt;
+
+### --vpp-lenscorrection [&lt;param1&gt;=&lt;value1&gt;][,&lt;param2&gt;=&lt;value2&gt;],...
+
+Correct radial lens distortion using Brown-Conrady coefficients.
+
+- k1=&lt;float&gt;, k2=&lt;float&gt;: radial distortion coefficients.
+- cx=&lt;float&gt;, cy=&lt;float&gt;: correction centre in normalized image coordinates (default: 0.5).
+
+```
+--vpp-lenscorrection k1=-0.20,k2=0.04
+```
+
+### --vpp-v360 [&lt;param1&gt;=&lt;value1&gt;][,&lt;param2&gt;=&lt;value2&gt;],...
+
+Convert between equirect, flat, and cubemap projections.
+
+- in=&lt;string&gt;, out=&lt;string&gt;: input/output projection: equirect / flat / cubemap.
+- yaw=&lt;float&gt;, pitch=&lt;float&gt;, roll=&lt;float&gt;: view rotation in degrees.
+- h_fov=&lt;float&gt;: horizontal field of view for flat output.
+- w=&lt;int&gt;, h=&lt;int&gt;: output resolution.
+
+```
+--vpp-v360 in=equirect,out=flat,yaw=30,pitch=0,h_fov=90,w=1920,h=1080
+```
 
 ### --vpp-convolution3d [&lt;param1&gt;=&lt;value1&gt;][,&lt;param2&gt;=&lt;value2&gt;],...
 3d noise reduction.
@@ -2825,8 +2882,11 @@ Edge-preserving smoothing filter.
   FFT based denoise filter.
 
 - **parameters**
-  - sigma=&lt;float&gt;  
+  - sigma=&lt;float&gt;
     Strength of filter. (default=1.0, 0.0 - 100.0)
+
+  - sigma2=&lt;float&gt; / sigma3=&lt;float&gt; / sigma4=&lt;float&gt;
+    Filter strength for mid-high / mid-low / low frequencies. 0.0 uses the same value as sigma. (default=0.0, 0.0 - 100.0)
   
   - amount=&lt;float&gt;  (default=1.0, 0.0 - 1.0)  
     Amount of denoising.
@@ -2847,6 +2907,32 @@ Edge-preserving smoothing filter.
   - temporal=&lt;int&gt; (default = 1)
     - 0 ... spatial filtering only
     - 1 ... enable temporal filtering
+
+  - bt=&lt;int&gt; (default = 0)
+    - 0 ... follow temporal
+    - 1 ... spatial only
+    - 2 ... previous + current frame
+    - 3 ... previous + current + next frame
+    - 4 ... 2 previous + previous + current + next frame
+    - -1 ... sharpen/degrid only
+
+  - sharpen=&lt;float&gt;
+    Frequency-domain sharpening strength. 0.0 disables it. (default=0.0, -10.0 - 10.0)
+
+  - scutoff=&lt;float&gt;
+    Sharpen cutoff frequency. (default=0.30, 0.0 - 1.0)
+
+  - svr=&lt;float&gt;
+    Sharpen vertical ratio. 0.0 disables vertical sharpening. (default=1.00, 0.0 - 10.0)
+
+  - smin=&lt;float&gt; / smax=&lt;float&gt;
+    Minimum / maximum sharpening limits. (default=10.0/100.0)
+
+  - degrid=&lt;float&gt;
+    Block grid compensation strength. 0.0 disables it, 1.0 applies the standard compensation. (default=0.0, 0.0 - 2.0)
+
+  - signorm=&lt;bool&gt;
+    Interpret sigma/smin/smax as real noise-power units. false keeps the legacy-compatible scale. (default=false)
 
   - prec=&lt;string&gt; (default = auto)
     - auto ... use fp16 if possible (faster)
@@ -2890,10 +2976,12 @@ Motion compensated degrain debug filter.
 Strong noise reduction filter.
 
 - **Parameters**
-  - radius=&lt;int&gt;  (default=3, 1-5)  
+  - radius=&lt;int&gt;  (default=3, 1-5)
     radius of filter. Larger value will result stronger denosing, but will require more calculation.
-  
-  - strength=&lt;float&gt;  (default=0.08, 0.0 - 1.0)  
+  - d=&lt;int&gt;  (default=0, 0 - 2)
+    Temporal radius. Previous/next frames are included in the weighting window.
+
+  - strength=&lt;float&gt;  (default=0.08, 0.0 - 1.0)
     Strength of the filter. Larger value will result stronger denosing.
   
   - lerp=&lt;float&gt;   (default=0.2, 0.0 - 1.0)  
@@ -2998,11 +3086,13 @@ Undo upscaling by solving the inverse system for a known upscaler kernel and out
 
   - width=&lt;int&gt; / height=&lt;int&gt;  
     Target native resolution. Specify both for an explicit kernel.
-  - b=&lt;float&gt;, c=&lt;float&gt;  
+  - b=&lt;float&gt;, c=&lt;float&gt;
     Bicubic parameters. Default: b=0.0, c=0.5.
-  - src_left=&lt;float&gt;, src_top=&lt;float&gt;  
+  - src_left=&lt;float&gt;, src_top=&lt;float&gt;
     Source sub-pixel offsets. Default: 0.0.
-  - border_handling=&lt;string&gt;  
+  - src_width=&lt;float&gt;, src_height=&lt;float&gt;
+    Fractional active source width/height for sources whose native size is not integer. Default: 0.0 (off).
+  - border_handling=&lt;string&gt;
     Border extension mode. Default: mirror.
     ```
     mirror, zero, repeat
@@ -3092,6 +3182,10 @@ Apply custom shaders in the specified path using [libplacebo](https://code.video
 - **Parameters**
     - shader=&lt;string&gt;  
       Target shader file path. (glsl file)
+    - &lt;name&gt;=&lt;value&gt;
+      Replace the value of `#define &lt;name&gt; ...` in the shader before it is parsed. This is a shader-source (compile-time) parameter and may be specified multiple times. It is separate from `custom=` parameters.
+    - custom=&lt;name&gt;=&lt;value&gt;
+      Set a runtime parameter declared with `//!PARAM` in the shader. libplacebo checks the parameter type and range. This parameter may be specified multiple times.
     - res=&lt;int&gt;x&lt;int&gt;  
       Output resolution of the filter.
     - csp=&lt;string&gt;  
@@ -3156,6 +3250,12 @@ Apply custom shaders in the specified path using [libplacebo](https://code.video
     ``` 
     Example: Apply a custom shader (1280x720 -> 2560x1440)
     --vpp-libplacebo-shader shader=default-shader-pack-2.1.0\Anime4K_Upscale_CNN_x2_L.glsl,res=2560x1440
+
+    Example: Set a shader //!PARAM.
+    --vpp-libplacebo-shader shader=example.glsl,custom=GAIN=1.5
+
+    Example: Set a shader #define.
+    --vpp-libplacebo-shader shader=example.glsl,GAIN=1.5
     ```
 
 ### --vpp-resize &lt;string&gt; or [&lt;param1&gt;=&lt;value1&gt;][,&lt;param2&gt;=&lt;value2&gt;],...
@@ -3557,7 +3657,7 @@ Fine halo removal filter with edge protection.
   ```
 
 ### --vpp-hqdering [&lt;param1&gt;=&lt;value1&gt;[,&lt;param2&gt;=&lt;value2&gt;]...]
-DCT ringing reduction filter. Applies correction to luma and copies chroma unchanged.
+DCT ringing reduction filter. Applies correction to luma by default.
 
 - **Parameters**
   - mrad=&lt;int&gt; (default=1, 1 - 3)  
@@ -3570,8 +3670,24 @@ DCT ringing reduction filter. Applies correction to luma and copies chroma uncha
     Output the effective mask only.
   - protect=&lt;bool&gt; (default=true)  
     Protect original edge pixels.
-  - edge=&lt;string&gt; (default=log)  
+  - edge=&lt;string&gt; (default=log)
     Edge detector: log, sobel, prewitt, scharr, kirsch, laplacian.
+  - thr=&lt;int&gt; (default=0)
+    Limit for the change per pixel in 8-bit scale. `0` disables the limit.
+  - elast=&lt;float&gt; (default=2.0, 1.0 - 3.0)
+    Elastic falloff for `thr`.
+  - darkthr=&lt;int&gt; (default=-1)
+    Separate limit for darkening. `-1` follows `thr`.
+  - minp=&lt;int&gt; (default=0, 0 - 3)
+    Edge-core inpand iterations excluded from the ring mask.
+  - msmooth=&lt;int&gt; (default=0, 0 - 3)
+    Ring mask smoothing iterations.
+  - drrep=&lt;int&gt; (default=0)
+    Repair blurred clip. `0`=off, `1`=clamp to the source 3x3 min/max.
+  - sharp=&lt;int&gt; (default=0, 0 - 3)
+    Contra-sharpening level. Restores line strength lost to blur without reintroducing ringing.
+  - planes=&lt;string&gt; (default=y)
+    Target planes. `all`, or `:`-separated list of `y`, `u`, `v`.
 
 - examples
   ```
@@ -3635,13 +3751,15 @@ Dynamic edge-based sharpening filter. Sharpens only around edges.
   ```
 
 ### --vpp-cas [&lt;param1&gt;=&lt;value1&gt;][,&lt;param2&gt;=&lt;value2&gt;],...
-Luma-only Contrast Adaptive Sharpening filter. Applies CAS to luma and copies chroma unchanged.
+Contrast Adaptive Sharpening filter. Applies CAS to luma by default.
 
 - **Parameters**
   - sharpness=&lt;float&gt; (default=0.4, 0.0 - 1.0)  
     Sharpening strength. Internally maps to the CAS peak value.
-  - hdr=&lt;bool&gt; (default=false)  
+  - hdr=&lt;bool&gt; (default=false)
     Skips the SDR gamma 2.0 luma approximation. Enable this for HDR sources such as PQ or HLG.
+  - chroma=&lt;bool&gt; (default=false)
+    Also sharpen chroma planes.
 
 - examples
   ```
@@ -3796,8 +3914,14 @@ Neutralize color casts, normalize lightness, or boost contrast/saturation using 
   
   - saturation=&lt;float&gt; (default=1.0, 0.0 - 3.0)  
   
-  - hue=&lt;float&gt; (default=0.0, -180 - 180)  
-  
+  - hue=&lt;float&gt; (default=0.0, -180 - 180)
+
+  - coring=&lt;bool&gt;  (default=false)
+
+  - start_hue=&lt;float&gt; (default=0.0, 0.0 - 360.0)
+  - end_hue=&lt;float&gt; (default=360.0, 0.0 - 360.0)
+    Limit hue/saturation adjustment to the hue angle range.
+
   - swapuv=&lt;bool&gt;  (default=false)
 
   - y_offset=&lt;float&gt; (default=0.0, -1.0 - 1.0)  
@@ -3855,8 +3979,10 @@ Apply color adjustments using curves.
   - b=&lt;string&gt;  
     Set curve points for blue. Will override preset settings.
   
-  - all=&lt;string&gt;  
+  - all=&lt;string&gt;
     Set curve points for r,g,b when not specified. Will override preset settings.
+  - interp=&lt;string&gt; (default=spline)
+    Interpolation method. `spline` uses natural cubic spline, `pchip` uses monotone cubic interpolation that avoids overshoot between points.
 
 - Examples
   ```
@@ -3898,9 +4024,11 @@ Apply color adjustments using curves.
     Stronger effect could be expected, by processing blur first.
     However side effects may also become stronger, which might make thin lines to disappear.
   
-  - rand_each_frame (default=off)  
+  - rand_each_frame (default=off)
     Change the random number used by the filter every frame.
-  
+  - keep_tv_range=&lt;bool&gt; (default=off)
+    Clamp output to TV range, scaled by bit depth (`Y: 16-235`, `Cb/Cr: 16-240`).
+
 - Examples
   ```
   Example:
@@ -4242,16 +4370,24 @@ Pre/post processing is inferred from the model channel count: 1ch=luma SR, 3ch=R
 - **Parameters**
   - model=&lt;string&gt;  
     Path to the ONNX model file (required). A model registered in models.json can be specified without extension when `--vpp-onnx-model-dir` is specified.
-  - provider=&lt;string&gt; (default: auto)  
+  - provider=&lt;string&gt; (default: auto)
     Execution provider. auto / cuda / tensorrt (trt)
-  - colormatrix=&lt;string&gt; (default: auto)  
-    Color matrix. auto (bt601 for SD, bt709 for HD) / bt601 / bt709 / bt2020
-  - colorrange=&lt;string&gt; (default: auto)  
-    Color range. auto (tv) / tv / pc
+  - prec=&lt;string&gt; (default: auto)
+    TensorRT calculation precision. auto / fp16 (f16) / fp32 (f32). auto uses fp16 with TensorRT. The CUDA provider uses fp32.
+  - colormatrix=&lt;string&gt; (default: auto)
+    Accepts the same names as [`--colormatrix`](#--colormatrix-string). `--vpp-onnx` supports auto / auto_res / smpte170m / bt470bg / bt709 / bt2020nc. The legacy names bt601 and bt2020 are also accepted as aliases for smpte170m and bt2020nc.
+  - colormatrix_out=&lt;string&gt; (default: auto)
+    Output-side RGB to YUV color matrix. `auto` uses the same matrix as `colormatrix`. Use bt2020nc for SDR-to-HDR models that output BT.2020/PQ RGB.
+  - colorrange=&lt;string&gt; (default: auto)
+    Accepts the same names as [`--colorrange`](#--colorrange-string). `--vpp-onnx` supports auto / tv / limited / pc / full.
   - colorspace=&lt;string&gt; (default: rgb)  
     Color space for 3ch models. rgb / ycbcr (for ArtCNN *_YCbCr models)
   - noise=&lt;int&gt; (default: 15, range: 0 - 255)  
     Noise sigma for noise models.
+  - frames=&lt;int&gt; (default: 1)  
+    Temporal window size for models with `T*3` RGB input channels and 3 output channels. Specify a positive odd number so that the output corresponds to the centre frame.
+  - mask=&lt;string&gt;  
+    Grayscale mask image for a two-input ONNX model. White pixels are processed and black pixels are retained. This is intended for static masks such as logo or watermark removal.
   - out_res=&lt;WxH&gt;  
     End-of-chain resize to an arbitrary final size, applied after model inference.
     A negative value on one axis keeps the source aspect (e.g. out_res=-2x1080).
@@ -4268,6 +4404,7 @@ Pre/post processing is inferred from the model channel count: 1ch=luma SR, 3ch=R
 - **Available model names**
 
   Models registered in models.json can be specified without extension (e.g. `model=artcnn_c4f32`). [`--vpp-onnx-model-dir`](#--vpp-onnx-model-dir-string) must be specified to use this feature.
+  Registered models can specify `"colormatrix_out": "bt2020nc"` in models.json. When `colormatrix_out=auto`, NVEnc uses the registered output matrix.
 
   | Family | Model names |
   |--------|------------|
@@ -4279,6 +4416,10 @@ Pre/post processing is inferred from the model channel count: 1ch=luma SR, 3ch=R
   | Anime4K Restore | anime4k_restore_cnn_l, anime4k_restore_cnn_soft_l, anime4k_restore_cnn_soft_ul, anime4k_restore_cnn_soft_vl, anime4k_restore_cnn_ul, anime4k_restore_cnn_vl |
   | Anime4K Upscale CNN | anime4k_upscale_cnn_s, anime4k_upscale_cnn_s_dn, anime4k_upscale_cnn_m, anime4k_upscale_cnn_m_dn, anime4k_upscale_cnn_l, anime4k_upscale_cnn_l_dn, anime4k_upscale_cnn_ul, anime4k_upscale_cnn_ul_dn, anime4k_upscale_cnn_vl, anime4k_upscale_cnn_vl_dn |
   | Anime4K GAN | anime4k_gan_s_x2, anime4k_gan_m_x2, anime4k_gan_l_x3, anime4k_gan_vl_x3, anime4k_gan_ul_x4, anime4k_gan_uul_x4 |
+  | HDRTVNet++ | hdrtvnetpp_agcm_dynamic, hdrtvnetpp_ensemble_dynamic |
+  | FBCNN | fbcnn_color_blind, fbcnn_gray_blind, fbcnn_color_flex, fbcnn_gray_flex |
+  | NAFNet | nafnet_gopro_width32, nafnet_reds_width64, nafnet_sidd_width32, nafnet_sidd_width64 |
+  | super-image | pan_2x/3x/4x, pan_bam_2x/3x/4x, carn_2x/3x/4x, carn_bam_2x/3x/4x, a2n_2x/3x/4x, awsrn_bam_2x/3x/4x, msrn_2x/3x/4x |
   | WebSR | websr_cnn2x_s_rl, websr_cnn2x_s_an, websr_cnn2x_s_3d, websr_cnn2x_m_rl, websr_cnn2x_m_an, websr_cnn2x_m_3d, websr_cnn2x_l_rl, websr_cnn2x_l_an, websr_cnn2x_l_3d |
   | waifu2x CUNet | waifu2x_cunet_scale2x, waifu2x_cunet_noise0, waifu2x_cunet_noise0_scale2x, waifu2x_cunet_noise1, waifu2x_cunet_noise1_scale2x, waifu2x_cunet_noise2, waifu2x_cunet_noise2_scale2x, waifu2x_cunet_noise3, waifu2x_cunet_noise3_scale2x |
   | waifu2x UpConv7 | waifu2x_upconv7_art_scale2x, waifu2x_upconv7_art_noise0_scale2x, waifu2x_upconv7_art_noise1_scale2x, waifu2x_upconv7_art_noise2_scale2x, waifu2x_upconv7_art_noise3_scale2x, waifu2x_upconv7_photo_scale2x, waifu2x_upconv7_photo_noise0_scale2x, waifu2x_upconv7_photo_noise1_scale2x, waifu2x_upconv7_photo_noise2_scale2x, waifu2x_upconv7_photo_noise3_scale2x |
@@ -4298,6 +4439,7 @@ Pre/post processing is inferred from the model channel count: 1ch=luma SR, 3ch=R
   --vpp-onnx model=artcnn_c4f32
   --vpp-onnx model=acnet/acnet_s.onnx,provider=cuda,out_res=1920x1080,resize=lanczos4
   --vpp-onnx model=anime4k_restore_cnn_l,out_res=-2x1080
+  --vpp-onnx model=hdrtvnetpp_agcm_dynamic,colormatrix=bt709 --output-depth 10 --colormatrix bt2020nc --colorprim bt2020 --transfer smpte2084
   ```
 
 ### --vpp-onnx-model-dir &lt;string&gt;
@@ -4312,6 +4454,37 @@ This option only specifies where model files are located. The ONNX Runtime GPU, 
 ```
 --vpp-onnx-model-dir C:\models\HWEnc-onnx-models
 ```
+
+### --vpp-onnx-cache-dir &lt;string&gt;
+Directory used to cache TensorRT engines.
+
+The cache is disabled when this option is omitted. The first run builds an engine, while later runs with the same model content, precision, input shape, and runtime environment can load the cached engine and substantially reduce startup time.
+
+Separate directories are used for each NVEnc version and revision, ONNX Runtime version, CUDA driver API version, and GPU. A TensorRT version mismatch is detected by TensorRT's own engine compatibility check, after which the affected engine is rebuilt once. Models in the same runtime environment share a timing cache. Directories for older environments are not removed automatically.
+
+```
+--vpp-onnx-cache-dir C:\models\HWEnc-onnx-cache
+```
+
+### --vpp-rife-ov [&lt;param1&gt;=&lt;value1&gt;][,&lt;param2&gt;=&lt;value2&gt;],...
+RIFE v4.x frame interpolation filter using ONNX Runtime CUDA/TensorRT. Input must be 8-bit YUV420 and its width and height must be multiples of 32.
+
+- **Parameters**
+  - model=&lt;string&gt;
+    Registered RIFE v4.x model name or path to an ONNX model (required). When `--vpp-onnx-model-dir` is specified, a name from `rife_ov_models.json` such as `rife_v4_6` can be used. Values containing `/`, `\\`, or `.` are treated as direct paths for compatibility.
+  - multi=&lt;int&gt; (default: 2, minimum: 2)
+    Frame-rate multiplier.
+  - device=&lt;string&gt; (default: GPU.0)
+    Accepted for cross-encoder compatibility; NVEnc uses its selected CUDA device.
+  - colormatrix=&lt;string&gt; (default: auto)
+    auto / bt601 / bt709 / bt2020.
+  - colorrange=&lt;string&gt; (default: auto)
+    auto / tv / pc.
+
+  ```
+  --vpp-onnx-model-dir C:\models\HWEnc-onnx-models --vpp-rife-ov model=rife_v4_6,multi=2
+  --vpp-rife-ov model=C:\models\rife_v4.6.onnx,multi=2
+  ```
 
 ### --vpp-perf-monitor
 Monitor the performance of each vpp filter, and output the average per frame processing time of the applied filter(s). Note that the overall encoding performance may slightly be harmed.

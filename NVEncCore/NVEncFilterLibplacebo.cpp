@@ -787,7 +787,7 @@ RGY_ERR NVEncFilterLibplaceboResample::setLibplaceboParam(const NVEncFilterParam
     m_filter_params->filter.taper = prm->resample.taper;
     if (prm->resample.radius >= 0.0) {
         if (!m_filter_params->filter.kernel->resizable) {
-            AddMessage(RGY_LOG_WARN, _T("radius %.1f ignored for non-resizable filter: %s.\n"), char_to_tstring(resample_filter_name).c_str());
+            AddMessage(RGY_LOG_WARN, _T("radius %.1f ignored for non-resizable filter: %s.\n"), prm->resample.radius, char_to_tstring(resample_filter_name).c_str());
         } else {
             m_filter_params->filter.radius = prm->resample.radius;
         }
@@ -1008,7 +1008,7 @@ RGY_ERR NVEncFilterLibplaceboDeband::setLibplaceboParam(const NVEncFilterParam *
     m_filter_params->grain = prm->deband.grainY;
     if (prm->deband.grainC >= 0.0f && prm->deband.grainY != prm->deband.grainC) {
         m_filter_params_c = std::make_unique<pl_deband_params>(*m_filter_params.get());
-        m_filter_params->grain = prm->deband.grainC;
+        m_filter_params_c->grain = prm->deband.grainC;
     }
     return RGY_ERR_NONE;
 }
@@ -1912,6 +1912,52 @@ RGY_ERR NVEncFilterLibplaceboShader::setLibplaceboParam(const NVEncFilterParam *
         AddMessage(RGY_LOG_ERROR, _T("Failed to parse shader.\n"));
         return RGY_ERR_UNKNOWN;
     }
+    for (const auto& cp : prm->shader.custom_params) {
+        const auto cname = tchar_to_string(cp.first);
+        const auto cvalS = tchar_to_string(cp.second);
+        const struct pl_hook_par *par = nullptr;
+        for (int k = 0; k < m_shader->num_parameters; k++) {
+            if (cname == m_shader->parameters[k].name) { par = &m_shader->parameters[k]; break; }
+        }
+        if (par == nullptr) {
+            AddMessage(RGY_LOG_ERROR, _T("libplacebo shader has no tunable parameter \"%s\".\n"), cp.first.c_str());
+            return RGY_ERR_INVALID_PARAM;
+        }
+        try {
+            switch (par->type) {
+            case PL_VAR_FLOAT: {
+                float v = std::stof(cvalS);
+                if (par->maximum.f > par->minimum.f && (v < par->minimum.f || v > par->maximum.f)) {
+                    AddMessage(RGY_LOG_ERROR, _T("libplacebo custom=%s: value out of range.\n"), cp.first.c_str());
+                    return RGY_ERR_INVALID_PARAM;
+                }
+                par->data->f = v; break;
+            }
+            case PL_VAR_SINT: {
+                int v = std::stoi(cvalS);
+                if (par->maximum.i > par->minimum.i && (v < par->minimum.i || v > par->maximum.i)) {
+                    AddMessage(RGY_LOG_ERROR, _T("libplacebo custom=%s: value out of range.\n"), cp.first.c_str());
+                    return RGY_ERR_INVALID_PARAM;
+                }
+                par->data->i = v; break;
+            }
+            case PL_VAR_UINT: {
+                unsigned v = (unsigned)std::stoul(cvalS);
+                if (par->maximum.u > par->minimum.u && (v < par->minimum.u || v > par->maximum.u)) {
+                    AddMessage(RGY_LOG_ERROR, _T("libplacebo custom=%s: value out of range.\n"), cp.first.c_str());
+                    return RGY_ERR_INVALID_PARAM;
+                }
+                par->data->u = v; break;
+            }
+            default:
+                AddMessage(RGY_LOG_ERROR, _T("libplacebo custom=%s: unsupported parameter type.\n"), cp.first.c_str());
+                return RGY_ERR_UNSUPPORTED;
+            }
+        } catch (...) {
+            AddMessage(RGY_LOG_ERROR, _T("libplacebo custom=%s: cannot parse value.\n"), cp.first.c_str());
+            return RGY_ERR_INVALID_PARAM;
+        }
+    }
     if (prm->shader.width <= 0 || prm->shader.height <= 0) {
         warnResolutionDependentWhenWithoutRes(prm->shader.shader, shader_data);
     }
@@ -1988,7 +2034,7 @@ RGY_ERR NVEncFilterLibplaceboShader::setLibplaceboParam(const NVEncFilterParam *
     m_sample_params->filter.taper = prm->shader.taper;
     if (prm->shader.radius >= 0.0) {
         if (!m_sample_params->filter.kernel->resizable) {
-            AddMessage(RGY_LOG_WARN, _T("radius %.1f ignored for non-resizable filter: %s.\n"), char_to_tstring(resample_filter_name).c_str());
+            AddMessage(RGY_LOG_WARN, _T("radius %.1f ignored for non-resizable filter: %s.\n"), prm->shader.radius, char_to_tstring(resample_filter_name).c_str());
         } else {
             m_sample_params->filter.radius = prm->shader.radius;
         }

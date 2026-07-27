@@ -85,6 +85,8 @@
 #include "NVEncFilterNvvfx.h"
 #include "NVEncFilterNGX.h"
 #include "NVEncFilterOnnx.h"
+#include "NVEncFilterRifeOV.h"
+#include "NVEncFilterStDeint.h"
 #include "NVEncFilterAnime4k.h"
 #include "NVEncFilterLibplacebo.h"
 #include "NVEncFilterDeband.h"
@@ -120,6 +122,8 @@
 #include "NVEncFilterSoftLight.h"
 #include "NVEncFilterTweak.h"
 #include "NVEncFilterTransform.h"
+#include "NVEncFilterLensCorrection.h"
+#include "NVEncFilterV360.h"
 #include "NVEncFilterColorspace.h"
 #include "NVEncFilterSubburn.h"
 #include "NVEncFilterSelectEvery.h"
@@ -174,6 +178,7 @@ static int vpp_deinterlacer_filter_count_wo_vppnv(const InEncodeVideoParam *inpu
     if (inputParam->vpp.kfm.enable) deinterlacer++;
     if (inputParam->vpp.yadif.enable) deinterlacer++;
     if (inputParam->vpp.decomb.enable) deinterlacer++;
+    if (inputParam->vpp.stdeint.enable) deinterlacer++;
     if (inputParam->vpp.bwdif.enable) deinterlacer++;
     if (inputParam->vpp.ivtc.enable) deinterlacer++;
     return deinterlacer;
@@ -1533,7 +1538,7 @@ RGY_ERR NVEncCore::AllocateBufferEncoder(const uint32_t uInputWidth, const uint3
             // alpha channelが必要な場合、メモリ確保は連続で行い、NvEncRegisterResourceを分割する
             if (alphaChannel) {
                 m_stEncodeBuffer[i].stInputBfrAlpha.pNV12devPtr = (CUdeviceptr)nullptr;
-                m_stEncodeBuffer[i].stInputBfrAlpha.dwHeight = uInputWidth;
+                m_stEncodeBuffer[i].stInputBfrAlpha.dwWidth = uInputWidth;
                 m_stEncodeBuffer[i].stInputBfrAlpha.dwHeight = uInputHeight;
                 m_stEncodeBuffer[i].stInputBfrAlpha.bufferFmt = inputFormat;
                 m_stEncodeBuffer[i].stInputBfrAlpha.uNV12Stride = m_stEncodeBuffer[i].stInputBfr.uNV12Stride;
@@ -1698,6 +1703,8 @@ bool NVEncCore::enableCuvidResize(const InEncodeVideoParam *inputParam) const {
             || inputParam->vpp.curves.enable
             || inputParam->vpp.softlight.enable
             || inputParam->vpp.transform.enable
+            || inputParam->vpp.lenscorrection.enable
+            || inputParam->vpp.v360.enable
             || inputParam->vpp.colorspace.enable
             || inputParam->vpp.libplacebo_tonemapping.enable
             || inputParam->vpp.subburn.size() > 0
@@ -2954,6 +2961,7 @@ std::vector<VppType> NVEncCore::InitFiltersCreateVppList(const InEncodeVideoPara
     if (inputParam->vpp.rtgmc_edi.enable && !degrainLegacy) filterPipeline.push_back(VppType::CL_RTGMC_EDI);
     if (inputParam->vpp.yadif.enable)         filterPipeline.push_back(VppType::CL_YADIF);
     if (inputParam->vpp.decomb.enable)        filterPipeline.push_back(VppType::CL_DECOMB);
+    if (inputParam->vpp.stdeint.enable)       filterPipeline.push_back(VppType::CL_STDEINT);
     if (inputParam->vpp.bwdif.enable)         filterPipeline.push_back(VppType::CL_BWDIF);
     if (inputParam->vpp.ivtc.enable)          filterPipeline.push_back(VppType::CL_IVTC);
     if (inputParam->vpp.decimate.enable)      filterPipeline.push_back(VppType::CL_DECIMATE);
@@ -2964,6 +2972,8 @@ std::vector<VppType> NVEncCore::InitFiltersCreateVppList(const InEncodeVideoPara
     }
     if (inputParam->vpp.selectevery.enable)   filterPipeline.push_back(VppType::CL_SELECT_EVERY);
     if (inputParam->vpp.transform.enable)     filterPipeline.push_back(VppType::CL_TRANSFORM);
+    if (inputParam->vpp.lenscorrection.enable) filterPipeline.push_back(VppType::CL_LENSCORRECTION);
+    if (inputParam->vpp.v360.enable)           filterPipeline.push_back(VppType::CL_V360);
     if (inputParam->vpp.convolution3d.enable) filterPipeline.push_back(VppType::CL_CONVOLUTION3D);
     if (inputParam->vppnv.nvvfxDenoise.enable) filterPipeline.push_back(VppType::NVVFX_DENOISE);
     if (inputParam->vppnv.nvvfxArtifactReduction.enable) filterPipeline.push_back(VppType::NVVFX_ARTIFACT_REDUCTION);
@@ -3014,6 +3024,7 @@ std::vector<VppType> NVEncCore::InitFiltersCreateVppList(const InEncodeVideoPara
     if (inputParam->vpp.overlay.size() > 0)  filterPipeline.push_back(VppType::CL_OVERLAY);
     if (inputParam->vppnv.ngxTrueHDR.enable)     filterPipeline.push_back(VppType::NGX_TRUEHDR);
     if (inputParam->vpp.onnx.enable)       filterPipeline.push_back(VppType::CL_ONNX);
+    if (inputParam->vpp.rife_ov.enable)    filterPipeline.push_back(VppType::CL_RIFE_OV);
     if (inputParam->vpp.anime4k.enable)     filterPipeline.push_back(VppType::CL_ANIME4K);
     if (inputParam->vpp.fruc.enable)     filterPipeline.push_back(VppType::CL_FRUC);
 
@@ -3505,6 +3516,9 @@ RGY_ERR NVEncCore::AddFilterCUDA(std::vector<std::unique_ptr<NVEncFilter>>& cufi
         unique_ptr<NVEncFilter> filter(new NVEncFilterNnedi());
         shared_ptr<NVEncFilterParamNnedi> param(new NVEncFilterParamNnedi());
         param->nnedi.enable = inputParam->vpp.nnedi.enable;
+        for (size_t iplane = 0; iplane < inputParam->vpp.nnedi.planes.size(); iplane++) {
+            param->nnedi.processPlane[iplane] = inputParam->vpp.nnedi.planes[iplane];
+        }
         param->nnedi.field = inputParam->vpp.nnedi.field;
         param->nnedi.nsize = inputParam->vpp.nnedi.nsize;
         param->nnedi.nns = inputParam->vpp.nnedi.nns;
@@ -3686,6 +3700,33 @@ RGY_ERR NVEncCore::AddFilterCUDA(std::vector<std::unique_ptr<NVEncFilter>>& cufi
         //パラメータ情報を更新
         m_pLastFilterParam = std::dynamic_pointer_cast<NVEncFilterParam>(param);
         //入力フレーム情報を更新
+        inputFrame = param->frameOut;
+        m_encFps = param->baseFps;
+        return RGY_ERR_NONE;
+    }
+    if (vppType == VppType::CL_STDEINT) {
+        unique_ptr<NVEncFilter> filter(new NVEncFilterStDeint());
+        shared_ptr<NVEncFilterParamStDeint> param(new NVEncFilterParamStDeint());
+        param->modelFile = inputParam->vpp.stdeint.modelFile;
+        param->modelDir = inputParam->vpp.onnxModelDir;
+        param->provider = inputParam->vpp.stdeint.provider;
+        param->precision = inputParam->vpp.stdeint.precision;
+        param->cacheDir = inputParam->vpp.onnx.cacheDir;
+        param->mode = inputParam->vpp.stdeint.mode;
+        param->colormatrix = inputParam->vpp.stdeint.colormatrix;
+        param->colorrange = inputParam->vpp.stdeint.colorrange;
+        param->deviceID = m_dev->id();
+        param->frameIn = inputFrame;
+        param->frameOut = inputFrame;
+        param->baseFps = m_encFps;
+        param->bOutOverwrite = false;
+        NVEncCtxAutoLock(cxtlock(m_dev->vidCtxLock()));
+        auto sts = filter->init(param, m_pLog);
+        if (sts != RGY_ERR_NONE) {
+            return sts;
+        }
+        cufilters.push_back(std::move(filter));
+        m_pLastFilterParam = std::dynamic_pointer_cast<NVEncFilterParam>(param);
         inputFrame = param->frameOut;
         m_encFps = param->baseFps;
         return RGY_ERR_NONE;
@@ -4015,6 +4056,40 @@ RGY_ERR NVEncCore::AddFilterCUDA(std::vector<std::unique_ptr<NVEncFilter>>& cufi
         //パラメータ情報を更新
         m_pLastFilterParam = std::dynamic_pointer_cast<NVEncFilterParam>(param);
         //入力フレーム情報を更新
+        inputFrame = param->frameOut;
+        m_encFps = param->baseFps;
+        return RGY_ERR_NONE;
+    }
+    if (vppType == VppType::CL_LENSCORRECTION) {
+        unique_ptr<NVEncFilter> filter(new NVEncFilterLensCorrection());
+        shared_ptr<NVEncFilterParamLensCorrection> param(new NVEncFilterParamLensCorrection());
+        param->lenscorrection = inputParam->vpp.lenscorrection;
+        param->frameIn = inputFrame;
+        param->frameOut = inputFrame;
+        param->baseFps = m_encFps;
+        param->bOutOverwrite = false;
+        NVEncCtxAutoLock(cxtlock(m_dev->vidCtxLock()));
+        auto sts = filter->init(param, m_pLog);
+        if (sts != RGY_ERR_NONE) return sts;
+        cufilters.push_back(std::move(filter));
+        m_pLastFilterParam = std::dynamic_pointer_cast<NVEncFilterParam>(param);
+        inputFrame = param->frameOut;
+        m_encFps = param->baseFps;
+        return RGY_ERR_NONE;
+    }
+    if (vppType == VppType::CL_V360) {
+        unique_ptr<NVEncFilter> filter(new NVEncFilterV360());
+        shared_ptr<NVEncFilterParamV360> param(new NVEncFilterParamV360());
+        param->v360 = inputParam->vpp.v360;
+        param->frameIn = inputFrame;
+        param->frameOut = inputFrame;
+        param->baseFps = m_encFps;
+        param->bOutOverwrite = false;
+        NVEncCtxAutoLock(cxtlock(m_dev->vidCtxLock()));
+        auto sts = filter->init(param, m_pLog);
+        if (sts != RGY_ERR_NONE) return sts;
+        cufilters.push_back(std::move(filter));
+        m_pLastFilterParam = std::dynamic_pointer_cast<NVEncFilterParam>(param);
         inputFrame = param->frameOut;
         m_encFps = param->baseFps;
         return RGY_ERR_NONE;
@@ -5059,6 +5134,8 @@ RGY_ERR NVEncCore::AddFilterCUDA(std::vector<std::unique_ptr<NVEncFilter>>& cufi
         param->onnx = inputParam->vpp.onnx;
         param->modelDir = inputParam->vpp.onnxModelDir;
         param->deviceID = m_dev->id();
+        param->sar[0] = inputParam->input.sar[0];
+        param->sar[1] = inputParam->input.sar[1];
         param->frameIn = inputFrame;
         param->frameOut = inputFrame;
         param->baseFps = m_encFps;
@@ -5073,6 +5150,29 @@ RGY_ERR NVEncCore::AddFilterCUDA(std::vector<std::unique_ptr<NVEncFilter>>& cufi
         //パラメータ情報を更新
         m_pLastFilterParam = std::dynamic_pointer_cast<NVEncFilterParam>(param);
         //入力フレーム情報を更新
+        inputFrame = param->frameOut;
+        m_encFps = param->baseFps;
+        return RGY_ERR_NONE;
+    }
+    if (vppType == VppType::CL_RIFE_OV) {
+        unique_ptr<NVEncFilter> filter(new NVEncFilterRifeOV());
+        shared_ptr<NVEncFilterParamRifeOV> param(new NVEncFilterParamRifeOV());
+        param->modelFile = inputParam->vpp.rife_ov.modelFile;
+        param->modelDir = inputParam->vpp.onnxModelDir;
+        param->device = inputParam->vpp.rife_ov.device;
+        param->multi = inputParam->vpp.rife_ov.multi;
+        param->colormatrix = inputParam->vpp.rife_ov.colormatrix;
+        param->colorrange = inputParam->vpp.rife_ov.colorrange;
+        param->deviceID = m_dev->id();
+        param->frameIn = inputFrame;
+        param->frameOut = inputFrame;
+        param->baseFps = m_encFps;
+        param->bOutOverwrite = false;
+        NVEncCtxAutoLock(cxtlock(m_dev->vidCtxLock()));
+        auto sts = filter->init(param, m_pLog);
+        if (sts != RGY_ERR_NONE) return sts;
+        cufilters.push_back(std::move(filter));
+        m_pLastFilterParam = std::dynamic_pointer_cast<NVEncFilterParam>(param);
         inputFrame = param->frameOut;
         m_encFps = param->baseFps;
         return RGY_ERR_NONE;

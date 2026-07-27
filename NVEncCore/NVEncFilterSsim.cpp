@@ -26,6 +26,10 @@
 //
 // ------------------------------------------------------------------------------------------
 
+#include <algorithm>
+#include <array>
+#include <cctype>
+#include <cmath>
 #include <map>
 #include "rgy_avutil.h"
 #include "rgy_filesystem.h"
@@ -172,6 +176,7 @@ NVEncFilterVshipData::NVEncFilterVshipData() :
     error(0),
     ssimu2Total(0.0),
     ssimu2Frames(0),
+    ssimu2Scores(),
     butteraugliTotalNormQ(0.0),
     butteraugliTotalNorm3(0.0),
     butteraugliTotalNorminf(0.0),
@@ -673,8 +678,25 @@ void NVEncFilterSsim::showResult() {
 #if ENABLE_LIBVSHIP
     if (prm->vshipSsimu2.enable) {
         if (m_vship.ssimu2Frames > 0) {
-            AddMessage(RGY_LOG_INFO, _T("SSIMU2 Score %.6f (Frames: %d)\n"),
-                m_vship.ssimu2Total / m_vship.ssimu2Frames, m_vship.ssimu2Frames);
+            auto scores = m_vship.ssimu2Scores;
+            std::sort(scores.begin(), scores.end());
+            const auto percentile = [&scores](double p) {
+                const double index = (scores.size() - 1) * p;
+                const auto lower = (size_t)index;
+                const auto upper = std::min(lower + 1, scores.size() - 1);
+                return scores[lower] + (scores[upper] - scores[lower]) * (index - lower);
+            };
+            double squaredDiffTotal = 0.0;
+            const double average = m_vship.ssimu2Total / m_vship.ssimu2Frames;
+            for (const auto score : scores) {
+                const double diff = score - average;
+                squaredDiffTotal += diff * diff;
+            }
+            AddMessage(RGY_LOG_INFO, _T("SSIMU2 Score %.6f (Frames: %d), StdDev %.6f, Median %.6f, P5 %.6f, P95 %.6f, Min %.6f, Max %.6f\n"),
+                average, m_vship.ssimu2Frames,
+                std::sqrt(squaredDiffTotal / scores.size()),
+                percentile(0.50), percentile(0.05), percentile(0.95),
+                scores.front(), scores.back());
         }
     }
     if (prm->vshipButteraugli.enable) {
@@ -695,7 +717,7 @@ void NVEncFilterSsim::showResult() {
 }
 
 #if ENABLE_VMAF
-NVEncFilterVMAFData::NVEncFilterVMAFData() : heProcFin(), abort(false), input_fin(false), procIndex(0), error(0), score(0.0), thread() {
+NVEncFilterVMAFData::NVEncFilterVMAFData() : heProcFin(), abort(false), input_fin(false), procIndex(0), error(0), score(0.0), nonFiniteFrames(0), thread() {
     for (auto &event : heProcFin) {
         event = CreateEvent(nullptr, false, false, nullptr);
     }
@@ -762,6 +784,7 @@ RGY_ERR NVEncFilterSsim::thread_func_vmaf(RGYParamThread threadParam) {
     m_vmaf.procIndex = 0;
     m_vmaf.error = 0;
     m_vmaf.score = 0.0;
+    m_vmaf.nonFiniteFrames = 0;
     m_frameHostSendIndex = 0;
     const auto frameInfo = m_frameHostEnc[0].frameInfo();
 
@@ -871,6 +894,16 @@ RGY_ERR NVEncFilterSsim::thread_func_vmaf(RGYParamThread threadParam) {
     VmafModel *model_ptr = nullptr;
     VmafModelCollection *model_collection_ptr = nullptr;
     const bool isModelPath = rgy_file_exists(model_str);
+    const auto model_str_lower = [&model_str]() {
+        auto str = model_str;
+        std::transform(str.begin(), str.end(), str.begin(), [](const unsigned char c) { return (char)std::tolower(c); });
+        return str;
+    }();
+    if (!isModelPath && model_str_lower.size() >= 5 && model_str_lower.substr(model_str_lower.size() - 5) == ".json") {
+        m_vmaf.error = 1;
+        AddMessage(RGY_LOG_ERROR, _T("vmaf model file not found: %s\n"), prm->vmaf.model.c_str());
+        return RGY_ERR_FILE_OPEN;
+    }
     if (isModelPath) {
         m_vmaf.error = m_libvmaf.p_vmaf_model_load_from_path()(&model_ptr, &model_cfg, model_str.c_str());
     } else {
@@ -888,14 +921,35 @@ RGY_ERR NVEncFilterSsim::thread_func_vmaf(RGYParamThread threadParam) {
         }
         model.reset(model_ptr);
         model_collection.reset(model_collection_ptr);
-        m_vmaf.error = m_libvmaf.p_vmaf_use_features_from_model_collection()(vmaf.get(), model_collection.get());
     } else {
         if (m_vmaf.error) {
             AddMessage(RGY_LOG_ERROR, isModelPath ? _T("problem loading model file: %s\n") : _T("problem loading model version: %s\n"), prm->vmaf.model.c_str());
             return RGY_ERR_UNKNOWN;
         }
         model.reset(model_ptr);
-        m_vmaf.error = m_libvmaf.p_vmaf_use_features_from_model()(vmaf.get(), model.get());
+    }
+    const auto useModelFeatures = [&]() {
+        if (model_collection) {
+            return m_libvmaf.p_vmaf_use_features_from_model_collection()(vmaf.get(), model_collection.get());
+        }
+        return m_libvmaf.p_vmaf_use_features_from_model()(vmaf.get(), model.get());
+    };
+    m_vmaf.error = useModelFeatures();
+    if (m_vmaf.error && tryCuda) {
+        AddMessage(RGY_LOG_WARN, _T("VMAF model contains CPU-only feature extractors, falling back to CPU feature extraction.\n"));
+        vmaf.reset();
+        cfg.n_threads = prm->vmaf.threads;
+        if (cfg.n_threads == 0) {
+            cfg.n_threads = get_cpu_info().physical_cores;
+        }
+        VmafContext *cpuVmafptr = nullptr;
+        m_vmaf.error = m_libvmaf.p_vmaf_init()(&cpuVmafptr, cfg);
+        if (!m_vmaf.error) {
+            vmaf.reset(cpuVmafptr);
+            useCuda = false;
+            setFilterInfo(prm->print(false) + _T("(") + RGY_CSP_NAMES[frameInfo.csp] + _T(")"));
+            m_vmaf.error = useModelFeatures();
+        }
     }
     if (m_vmaf.error) {
         AddMessage(RGY_LOG_ERROR, _T("problem loading feature extractors from model: %s\n"), prm->vmaf.model.c_str());
@@ -985,6 +1039,81 @@ RGY_ERR NVEncFilterSsim::thread_func_vmaf(RGYParamThread threadParam) {
     if (m_vmaf.error) {
         AddMessage(RGY_LOG_ERROR, _T("problem generating pooled VMAF score\n"));
         return RGY_ERR_UNKNOWN;
+    }
+    if (!std::isfinite(m_vmaf.score)) {
+        AddMessage(RGY_LOG_WARN, _T("libvmaf returned non-finite pooled VMAF score; recalculating from per-frame scores.\n"));
+
+        static const std::array<const char *, 32> vmafFeatureNames = {
+            "VMAF_integer_feature_adm2_score",
+            "integer_adm_scale0",
+            "integer_adm_scale1",
+            "integer_adm_scale2",
+            "integer_adm_scale3",
+            "integer_adm",
+            "integer_adm_num",
+            "integer_adm_den",
+            "integer_adm_num_scale0",
+            "integer_adm_den_scale0",
+            "integer_adm_num_scale1",
+            "integer_adm_den_scale1",
+            "integer_adm_num_scale2",
+            "integer_adm_den_scale2",
+            "integer_adm_num_scale3",
+            "integer_adm_den_scale3",
+            "VMAF_integer_feature_motion2_score",
+            "integer_vif",
+            "integer_vif_num",
+            "integer_vif_den",
+            "integer_vif_num_scale0",
+            "integer_vif_den_scale0",
+            "integer_vif_num_scale1",
+            "integer_vif_den_scale1",
+            "integer_vif_num_scale2",
+            "integer_vif_den_scale2",
+            "integer_vif_num_scale3",
+            "integer_vif_den_scale3",
+            "VMAF_feature_adm2_score",
+            "VMAF_feature_motion2_score",
+            "VMAF_feature_vif_scale0_score",
+            "VMAF_feature_vif_scale1_score",
+        };
+        double scoreSum = 0.0;
+        uint32_t scoreCount = 0;
+        for (unsigned i = 0; i < picture_index; i++) {
+            if ((prm->vmaf.subsample > 1) && (i % prm->vmaf.subsample)) {
+                continue;
+            }
+            double score = 0.0;
+            m_vmaf.error = m_libvmaf.p_vmaf_score_at_index()(vmaf.get(), model.get(), &score, i);
+            if (m_vmaf.error) {
+                AddMessage(RGY_LOG_ERROR, _T("problem generating VMAF score at frame %u\n"), i);
+                return RGY_ERR_UNKNOWN;
+            }
+            if (std::isfinite(score)) {
+                scoreSum += score;
+                scoreCount++;
+            } else {
+                m_vmaf.nonFiniteFrames++;
+                if (m_vmaf.nonFiniteFrames <= 16) {
+                    AddMessage(RGY_LOG_WARN, _T("libvmaf returned non-finite VMAF score at frame %u.\n"), i);
+                    for (const auto featureName : vmafFeatureNames) {
+                        double featureScore = 0.0;
+                        const auto featureErr = m_libvmaf.p_vmaf_feature_score_at_index()(vmaf.get(), featureName, &featureScore, i);
+                        if (featureErr == 0 && !std::isfinite(featureScore)) {
+                            AddMessage(RGY_LOG_WARN, _T("  non-finite VMAF feature at frame %u: %s\n"), i, char_to_tstring(featureName).c_str());
+                        }
+                    }
+                }
+            }
+        }
+        if (scoreCount == 0) {
+            AddMessage(RGY_LOG_ERROR, _T("No finite VMAF score was generated by libvmaf.\n"));
+            return RGY_ERR_UNKNOWN;
+        }
+        if (m_vmaf.nonFiniteFrames > 0) {
+            AddMessage(RGY_LOG_WARN, _T("Ignoring %u non-finite VMAF frame score(s) returned by libvmaf.\n"), m_vmaf.nonFiniteFrames);
+        }
+        m_vmaf.score = scoreSum / scoreCount;
     }
 #if 0
     const enum VmafOutputFormat output_fmt = log_fmt_map(log_fmt);
@@ -1106,6 +1235,7 @@ RGY_ERR NVEncFilterSsim::thread_func_vship(RGYParamThread threadParam) {
     m_vship.error = 0;
     m_vship.ssimu2Total = 0.0;
     m_vship.ssimu2Frames = 0;
+    m_vship.ssimu2Scores.clear();
     m_vship.butteraugliTotalNormQ = 0.0;
     m_vship.butteraugliTotalNorm3 = 0.0;
     m_vship.butteraugliTotalNorminf = 0.0;
@@ -1233,6 +1363,7 @@ RGY_ERR NVEncFilterSsim::thread_func_vship(RGYParamThread threadParam) {
                     m_vship.error = (int)err;
                 } else {
                     m_vship.ssimu2Total += score;
+                    m_vship.ssimu2Scores.push_back(score);
                     m_vship.ssimu2Frames++;
                 }
             }
