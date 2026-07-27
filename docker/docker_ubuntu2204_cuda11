@@ -86,8 +86,8 @@ RUN echo "Using build_scripts ${FFMPEG_DLL_REF}@${FFMPEG_DLL_REV}" \
     && export NUMBER_OF_PROCESSORS="$(nproc)" \
     && bash ./build_ffmpeg_dll.sh --skip-src-archive \
     && bash ./build_libvmaf.sh --skip-src-archive \
-    && test -f "${FFMPEG_PREFIX}/lib/pkgconfig/libavutil.pc" \
-    && test -f "${VMAF_PREFIX}/lib/pkgconfig/libvmaf.pc" \
+    && (test -f "${FFMPEG_PREFIX}/lib/pkgconfig/libavutil.pc" || test -f "${FFMPEG_PREFIX}/lib/x86_64-linux-gnu/pkgconfig/libavutil.pc" || test -f "${FFMPEG_PREFIX}/lib64/pkgconfig/libavutil.pc" || find "${FFMPEG_PREFIX}" -name "libavutil.pc" | grep -q .) \
+    && (test -f "${VMAF_PREFIX}/lib/pkgconfig/libvmaf.pc" || test -f "${VMAF_PREFIX}/lib/x86_64-linux-gnu/pkgconfig/libvmaf.pc" || test -f "${VMAF_PREFIX}/lib64/pkgconfig/libvmaf.pc" || find "${VMAF_PREFIX}" -name "libvmaf.pc" | grep -q .) \
     && find "${BUILD_SCRIPTS_DIR}" -mindepth 1 -maxdepth 1 ! -path "${BUILD_SCRIPTS_DIR}/ffmpeg_dll" -exec rm -rf {} + \
     && find "${BUILD_SCRIPTS_DIR}/ffmpeg_dll" -mindepth 1 -maxdepth 1 ! -path "${BUILD_SCRIPTS_DIR}/ffmpeg_dll/build_dll" ! -path "${BUILD_SCRIPTS_DIR}/ffmpeg_dll/x64" -exec rm -rf {} + \
     && find "${BUILD_SCRIPTS_DIR}/ffmpeg_dll/build_dll" -mindepth 1 -maxdepth 1 ! -path "${BUILD_SCRIPTS_DIR}/ffmpeg_dll/build_dll/x64" -exec rm -rf {} + \
