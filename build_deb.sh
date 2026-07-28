@@ -1,5 +1,7 @@
 #!/bin/sh
 
+set -e
+
 PACKAGE_NAME=nvencc
 PACKAGE_BIN=nvencc
 PACKAGE_MAINTAINER=rigaya
@@ -34,6 +36,13 @@ if [ ! -e ${PACKAGE_BIN} ]; then
     exit 1
 fi
 
+NVJPEG2K_LIB_DIR=${NVJPEG2K_ROOT:?NVJPEG2K_ROOT is not set}/lib/${NVJPEG2K_CUDA_MAJOR:?NVJPEG2K_CUDA_MAJOR is not set}
+if [ ! -f "${NVJPEG2K_LIB_DIR}/libnvjpeg2k.so.0.9.0.43" ] || [ ! -L "${NVJPEG2K_LIB_DIR}/libnvjpeg2k.so" ] || [ ! -f "${NVJPEG2K_ROOT}/LICENSE" ]; then
+    echo "nvJPEG2000 runtime or license is missing under ${NVJPEG2K_ROOT}!"
+    exit 1
+fi
+
+rm -rf ${PACKAGE_ROOT}
 mkdir -p ${PACKAGE_ROOT}/DEBIAN
 build_pkg/replace.py \
     -i build_pkg/template/DEBIAN/control \
@@ -45,10 +54,21 @@ build_pkg/replace.py \
     --pkg-maintainer ${PACKAGE_MAINTAINER} \
     --pkg-depends ${PACKAGE_DEPENDS} \
     --pkg-desc ${PACKAGE_DESCRIPTION}
+cp packaging/debian/postinst ${PACKAGE_ROOT}/DEBIAN/postinst
+cp packaging/debian/postrm ${PACKAGE_ROOT}/DEBIAN/postrm
+chmod 755 ${PACKAGE_ROOT}/DEBIAN/postinst ${PACKAGE_ROOT}/DEBIAN/postrm
 
 mkdir -p ${PACKAGE_ROOT}/usr/bin
 cp ${PACKAGE_BIN} ${PACKAGE_ROOT}/usr/bin
 chmod +x ${PACKAGE_ROOT}/usr/bin/${PACKAGE_BIN}
+
+PACKAGE_LIB_DIR=${PACKAGE_ROOT}/usr/lib/x86_64-linux-gnu
+mkdir -p ${PACKAGE_LIB_DIR}
+cp -a ${NVJPEG2K_LIB_DIR}/libnvjpeg2k.so* ${PACKAGE_LIB_DIR}/
+
+PACKAGE_LICENSE_DIR=${PACKAGE_ROOT}/usr/share/doc/${PACKAGE_NAME}
+mkdir -p ${PACKAGE_LICENSE_DIR}
+cp ${NVJPEG2K_ROOT}/LICENSE ${PACKAGE_LICENSE_DIR}/nvjpeg2000-LICENSE
 
 DEB_FILE="${PACKAGE_NAME}_${PACKAGE_VERSION}_${PACKAGE_ARCH}.deb"
 dpkg-deb -b "${PACKAGE_ROOT}" "${DEB_FILE}"

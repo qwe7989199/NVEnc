@@ -145,6 +145,7 @@ static std::unique_ptr<RGYInputNvJ2k::NvJ2kFuncs> nvj2k_load() {
     static const TCHAR *moduleNames[] = {
         _T("libnvjpeg2k.so.13"),
         _T("libnvjpeg2k.so.12"),
+        _T("libnvjpeg2k.so.0"),
         _T("libnvjpeg2k.so")
     };
 #endif

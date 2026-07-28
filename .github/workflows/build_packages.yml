@@ -17,23 +17,27 @@ jobs:
           - dockerimg: ubuntu2004_cuda11
             pkgtype: deb
             arch: x86_64
+            nvjpeg2k_cuda_major: 11
           - dockerimg: fedora39_cuda12
             pkgtype: rpm
             arch: x86_64
+            nvjpeg2k_cuda_major: 12
           #- dockerimg: ubuntu2204_cuda11_aarch64
           #  pkgtype: deb
           #  arch: arm64
 
     env:
-      DOCKER_FILE: docker/docker_${{ matrix.dockerimg }}
       DOCKER_IMAGE: ${{ matrix.dockerimg }}
       PKG_TYPE: ${{ matrix.pkgtype }}
+      BASE_IMAGE_REPO: ghcr.io/rigaya/nvenc-build
       FFMPEG_PREFIX: /opt/build_scripts/ffmpeg_dll/build_dll/x64/build
       VMAF_PREFIX: /opt/build_scripts/ffmpeg_dll/x64/build
       NVENC_HEADER_DIR: /opt/nvenc_headers
       AVISYNTH_HEADER_INC: /opt/nvenc_headers/AviSynthPlus-3.7.5/avs_core/include
       VAPOURSYNTH_HEADER_INC: /opt/nvenc_headers/vapoursynth-R72/include
       VSHIP_HEADER_INC: /opt/nvenc_headers/vship/src
+      NVJPEG2K_BUILD: 0.9.0.43
+      NVJPEG2K_SHA256: 1d26f62a7141e81c604342a610deb8ad8d10e1c08cb59598881dc201e59f21a3
 
     name: Upload Release Asset
     runs-on: ubuntu-latest
@@ -43,18 +47,14 @@ jobs:
         run: |
           REPOSITORY=$(echo ${{ github.repository }} | sed -e "s#.*/##")
           VERSION=$(echo ${{ github.ref }} | sed -e "s#refs/tags/##g")
-          IMAGE="build_nvencc_${{ env.DOCKER_IMAGE }}"
-          TAG=$(echo $GITHUB_SHA | head -c7)
           NPROC=$(grep 'processor' /proc/cpuinfo | wc -l)
           OUTPUT_DIR=`pwd`/output
-          LOCAL_USER_ID=$(id -u)
-          LOCAL_GROUP_ID=$(id -g)
-          echo "tagged_image=${IMAGE}:${TAG}" >> $GITHUB_OUTPUT
-          echo "tag=${TAG}" >> $GITHUB_OUTPUT
+          BASE_IMAGE="${{ env.BASE_IMAGE_REPO }}:${{ env.DOCKER_IMAGE }}"
+          NVJPEG2K_DIR="${RUNNER_TEMP}/nvjpeg2k"
+          echo "base_image=${BASE_IMAGE}" >> $GITHUB_OUTPUT
           echo "nproc=${NPROC}" >> $GITHUB_OUTPUT
           echo "output_dir=${OUTPUT_DIR}" >> $GITHUB_OUTPUT
-          echo "local_user_id=${LOCAL_USER_ID}" >> $GITHUB_OUTPUT
-          echo "local_group_id=${LOCAL_GROUP_ID}" >> $GITHUB_OUTPUT
+          echo "nvjpeg2k_dir=${NVJPEG2K_DIR}" >> $GITHUB_OUTPUT
 
       - name: Checkout code
         uses: actions/checkout@v4
@@ -80,6 +80,24 @@ jobs:
         run: |
           mkdir -p ${{ steps.prep.outputs.output_dir }}
 
+      - name: Pull rigaya build image
+        run: docker pull ${{ steps.prep.outputs.base_image }}
+
+      - name: Download nvJPEG2000 runtime
+        run: |
+          set -euo pipefail
+          ARCHIVE="libnvjpeg_2k-linux-x86_64-${{ env.NVJPEG2K_BUILD }}-archive.tar.xz"
+          URL="https://developer.download.nvidia.com/compute/nvjpeg2000/redist/libnvjpeg_2k/linux-x86_64/${ARCHIVE}"
+          DOWNLOAD="${RUNNER_TEMP}/${ARCHIVE}"
+          curl --fail --location --retry 3 --output "${DOWNLOAD}" "${URL}"
+          echo "${{ env.NVJPEG2K_SHA256 }}  ${DOWNLOAD}" | sha256sum --check --strict
+          rm -rf "${{ steps.prep.outputs.nvjpeg2k_dir }}"
+          mkdir -p "${{ steps.prep.outputs.nvjpeg2k_dir }}"
+          tar -xJf "${DOWNLOAD}" --strip-components=1 -C "${{ steps.prep.outputs.nvjpeg2k_dir }}"
+          test -f "${{ steps.prep.outputs.nvjpeg2k_dir }}/LICENSE"
+          test -f "${{ steps.prep.outputs.nvjpeg2k_dir }}/lib/${{ matrix.nvjpeg2k_cuda_major }}/libnvjpeg2k.so.0.9.0.43"
+          test -L "${{ steps.prep.outputs.nvjpeg2k_dir }}/lib/${{ matrix.nvjpeg2k_cuda_major }}/libnvjpeg2k.so"
+
       - name: Set up QEMU
         if: matrix.arch != 'x86_64'
         uses: docker/setup-qemu-action@v3
@@ -87,13 +105,15 @@ jobs:
       - name: Build Exec
         id: build_exec
         run: |
-          docker build --build-arg LOCAL_USER_ID=${{ steps.prep.outputs.local_user_id }} --build-arg LOCAL_GROUP_ID=${{ steps.prep.outputs.local_group_id }} --tag ${{ steps.prep.outputs.tagged_image }} --platform linux/${{ matrix.arch }} --file ${{ env.DOCKER_FILE }} ./
           docker run -dit --rm \
             -v ${{ github.workspace }}:/work \
-             -v ${{ steps.prep.outputs.output_dir }}:/output \
+            -v ${{ steps.prep.outputs.output_dir }}:/output \
+            -v ${{ steps.prep.outputs.nvjpeg2k_dir }}:/opt/nvjpeg2k:ro \
+            -e NVJPEG2K_ROOT=/opt/nvjpeg2k \
+            -e NVJPEG2K_CUDA_MAJOR=${{ matrix.nvjpeg2k_cuda_major }} \
             -u "$(id -u):$(id -g)" \
             --workdir /work \
-            --name build_pkg ${{ steps.prep.outputs.tagged_image }}
+            --name build_pkg ${{ steps.prep.outputs.base_image }}
           docker exec build_pkg bash -lc '
             VMAFPKG="${{ env.VMAF_PREFIX }}/lib/pkgconfig"
             FFPKG="${{ env.FFMPEG_PREFIX }}/lib/pkgconfig:${{ env.FFMPEG_PREFIX }}/lib/x86_64-linux-gnu/pkgconfig"
@@ -127,6 +147,19 @@ jobs:
           '
           docker exec build_pkg cp ./build/nvencc ./nvencc
           docker exec build_pkg ./build_${{ env.PKG_TYPE }}.sh
+          docker exec build_pkg bash -lc '
+            set -euo pipefail
+            if [[ "${{ env.PKG_TYPE }}" == "deb" ]]; then
+              dpkg-deb --fsys-tarfile ./*.deb | tar -tf - | tee /tmp/package-contents.txt
+            else
+              rpm --query --list --package ./*.rpm | tee /tmp/package-contents.txt
+            fi
+            grep -E "/usr/bin/nvencc$" /tmp/package-contents.txt
+            grep -E "/libnvjpeg2k\.so$" /tmp/package-contents.txt
+            grep -E "/libnvjpeg2k\.so\.0$" /tmp/package-contents.txt
+            grep -E "/libnvjpeg2k\.so\.0\.9\.0\.43$" /tmp/package-contents.txt
+            grep -E "/nvjpeg2000-LICENSE$" /tmp/package-contents.txt
+          '
           docker exec build_pkg bash -lc "cp -v ./*.${{ env.PKG_TYPE }} /output/"
           PKGFILE=`ls ${{ steps.prep.outputs.output_dir }}/*.${{ env.PKG_TYPE }}`
           echo ${PKGFILE}
