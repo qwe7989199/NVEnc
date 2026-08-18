@@ -97,7 +97,7 @@ static const auto VPPTYPE_TO_STR = make_array<std::pair<VppType, tstring>>(
     std::make_pair(VppType::CL_KFM,                  _T("kfm")),
     std::make_pair(VppType::CL_YADIF,                _T("yadif")),
     std::make_pair(VppType::CL_DECOMB,               _T("decomb")),
-    std::make_pair(VppType::CL_STDEINT,              _T("stdeint")),
+    std::make_pair(VppType::CL_ONNX_DEINT,              _T("onnx-deint")),
     std::make_pair(VppType::CL_IVTC,                 _T("ivtc")),
     std::make_pair(VppType::CL_DECIMATE,             _T("decimate")),
     std::make_pair(VppType::CL_MPDECIMATE,           _T("mpdecimate")),
@@ -2155,41 +2155,39 @@ tstring VppRifeOV::print() const {
         modelFile.c_str(), device.c_str(), multi, colormatrix.c_str(), colorrange.c_str());
 }
 
-const CX_DESC list_vpp_stdeint_mode[] = {
-    { _T("bob"),    (int)VppStDeintMode::Bob },
-    { _T("normal"), (int)VppStDeintMode::Normal },
+const CX_DESC list_vpp_onnx_deint_mode[] = {
+    { _T("bob"),    (int)VppOnnxDeintMode::Bob },
+    { _T("normal"), (int)VppOnnxDeintMode::Normal },
     { nullptr, 0 }
 };
 
-VppStDeint::VppStDeint() :
+VppOnnxDeint::VppOnnxDeint() :
     enable(false),
     modelFile(),
     device(_T("GPU.0")),
-    provider(_T("auto")),
     precision(_T("fp32")),
-    mode(VppStDeintMode::Bob),
+    mode(VppOnnxDeintMode::Bob),
     colormatrix(RGY_MATRIX_AUTO),
     colorrange(RGY_COLORRANGE_AUTO) {
 }
 
-bool VppStDeint::operator==(const VppStDeint& x) const {
+bool VppOnnxDeint::operator==(const VppOnnxDeint& x) const {
     return enable == x.enable
         && modelFile == x.modelFile
         && device == x.device
-        && provider == x.provider
         && precision == x.precision
         && mode == x.mode
         && colormatrix == x.colormatrix
         && colorrange == x.colorrange;
 }
 
-bool VppStDeint::operator!=(const VppStDeint& x) const {
+bool VppOnnxDeint::operator!=(const VppOnnxDeint& x) const {
     return !(*this == x);
 }
 
-tstring VppStDeint::print() const {
-    return strsprintf(_T("model=%s,device=%s,provider=%s,precision=%s,mode=%s,colormatrix=%s,colorrange=%s"),
-        modelFile.c_str(), device.c_str(), provider.c_str(), precision.c_str(), get_cx_desc(list_vpp_stdeint_mode, (int)mode),
+tstring VppOnnxDeint::print() const {
+    return strsprintf(_T("model=%s,device=%s,precision=%s,mode=%s,colormatrix=%s,colorrange=%s"),
+        modelFile.c_str(), device.c_str(), precision.c_str(), get_cx_desc(list_vpp_onnx_deint_mode, (int)mode),
         get_cx_desc(list_colormatrix, colormatrix), get_cx_desc(list_colorrange, colorrange));
 }
 
@@ -2457,6 +2455,7 @@ VppDegrain::VppDegrain() :
     searchParam(FILTER_DEFAULT_DEGRAIN_SEARCHPARAM),
     pelSearch(FILTER_DEFAULT_DEGRAIN_PELSEARCH),
     searchEarlySad(FILTER_DEFAULT_DEGRAIN_SEARCH_EARLY_SAD),
+    spatialEarlySad(FILTER_DEFAULT_DEGRAIN_SPATIAL_EARLY_SAD),
     trueMotion(FILTER_DEFAULT_DEGRAIN_TRUEMOTION),
     lambda(FILTER_DEFAULT_DEGRAIN_LAMBDA),
     lsad(FILTER_DEFAULT_DEGRAIN_LSAD),
@@ -2493,6 +2492,7 @@ bool VppDegrain::operator==(const VppDegrain &x) const {
         && searchParam == x.searchParam
         && pelSearch == x.pelSearch
         && searchEarlySad == x.searchEarlySad
+        && spatialEarlySad == x.spatialEarlySad
         && trueMotion == x.trueMotion
         && lambda == x.lambda
         && lsad == x.lsad
@@ -2512,9 +2512,9 @@ bool VppDegrain::operator!=(const VppDegrain &x) const {
 }
 
 tstring VppDegrain::print() const {
-    return strsprintf(_T("degrain: preset %s, mode %s, stage %s, blksize %d, search %d, thsad %d, thsadc %d, thscd1 %d, thscd2 %d, pel %d, levels %d, overlap %d, delta %d, tr0 %d, rep0 %d, search_refine %d, subpelinterp %d, searchparam %d, pelsearch %d, search_early_sad %d, truemotion %s, lambda %d, lsad %d, pnew %d, plevel %d, globalmotion %s, dct %d, useflag %d, chroma %s, binomial %s, tv_range %s, mv_spatial_refine %d"),
+    return strsprintf(_T("degrain: preset %s, mode %s, stage %s, blksize %d, search %d, thsad %d, thsadc %d, thscd1 %d, thscd2 %d, pel %d, levels %d, overlap %d, delta %d, tr0 %d, rep0 %d, search_refine %d, subpelinterp %d, searchparam %d, pelsearch %d, search_early_sad %d, spatial_early_sad %d, truemotion %s, lambda %d, lsad %d, pnew %d, plevel %d, globalmotion %s, dct %d, useflag %d, chroma %s, binomial %s, tv_range %s, mv_spatial_refine %d"),
         get_cx_desc(list_vpp_degrain_preset, (int)preset), get_cx_desc(list_vpp_degrain_mode, (int)mode), get_cx_desc(list_vpp_degrain_stage, (int)stage), blksize, search, thsad, thsadc, thscd1, thscd2, pel, levels, overlap, delta, tr0, rep0, searchRefine,
-        subpelInterp, searchParam, pelSearch, searchEarlySad, trueMotion ? _T("true") : _T("false"), lambda, lsad, pnew, plevel, globalMotion ? _T("true") : _T("false"), dct, useFlag,
+        subpelInterp, searchParam, pelSearch, searchEarlySad, spatialEarlySad, trueMotion ? _T("true") : _T("false"), lambda, lsad, pnew, plevel, globalMotion ? _T("true") : _T("false"), dct, useFlag,
         chroma ? _T("true") : _T("false"), binomial < 0 ? _T("auto") : (binomial ? _T("true") : _T("false")), tvRange ? _T("true") : _T("false"),
         mvSpatialRefine);
 }
@@ -2785,7 +2785,8 @@ VppKfm::VppKfm() :
     debug(false),
     debugStage(VppKfmDebugStage::None),
     timecode(),
-    searchEarlySadOverride(FILTER_DEFAULT_KFM_SEARCH_EARLY_SAD_OVERRIDE) {
+    searchEarlySadOverride(FILTER_DEFAULT_KFM_SEARCH_EARLY_SAD_OVERRIDE),
+    spatialEarlySadOverride(FILTER_DEFAULT_KFM_SPATIAL_EARLY_SAD_OVERRIDE) {
 }
 
 bool VppKfm::operator==(const VppKfm& x) const {
@@ -2802,14 +2803,15 @@ bool VppKfm::operator==(const VppKfm& x) const {
         && debug == x.debug
         && debugStage == x.debugStage
         && timecode == x.timecode
-        && searchEarlySadOverride == x.searchEarlySadOverride;
+        && searchEarlySadOverride == x.searchEarlySadOverride
+        && spatialEarlySadOverride == x.spatialEarlySadOverride;
 }
 bool VppKfm::operator!=(const VppKfm& x) const {
     return !(*this == x);
 }
 
 tstring VppKfm::print() const {
-    auto str = strsprintf(_T("kfm: mode %s, preset %s, timing %s, past_cycles %d, thswitch %.3f, ucf %s, nr %s, is120 %s, rff %s, search_early_sad %d"),
+    auto str = strsprintf(_T("kfm: mode %s, preset %s, timing %s, past_cycles %d, thswitch %.3f, ucf %s, nr %s, is120 %s, rff %s, search_early_sad %d, spatial_early_sad %d"),
         get_cx_desc(list_vpp_kfm_mode, (int)mode),
         get_cx_desc(list_vpp_rtgmc_preset, (int)preset),
         get_cx_desc(list_vpp_kfm_timing, (int)timing),
@@ -2819,7 +2821,8 @@ tstring VppKfm::print() const {
         nr ? _T("true") : _T("false"),
         is120 ? _T("true") : _T("false"),
         rff ? _T("true") : _T("false"),
-        searchEarlySadOverride);
+        searchEarlySadOverride,
+        spatialEarlySadOverride);
     if (debugStage != VppKfmDebugStage::None) {
         str += strsprintf(_T(", debug_stage %s"),
             get_cx_desc(list_vpp_kfm_debug_stage, (int)debugStage));
@@ -3951,7 +3954,7 @@ RGYParamVpp::RGYParamVpp() :
     kfm(),
     yadif(),
     decomb(),
-    stdeint(),
+    onnxDeint(),
     ivtc(),
     rff(),
     selectevery(),
@@ -4034,7 +4037,7 @@ bool RGYParamVpp::operator==(const RGYParamVpp& x) const {
         && kfm == x.kfm
         && yadif == x.yadif
         && decomb == x.decomb
-        && stdeint == x.stdeint
+        && onnxDeint == x.onnxDeint
         && ivtc == x.ivtc
         && rff == x.rff
         && selectevery == x.selectevery
@@ -4415,6 +4418,7 @@ RGYParamCommon::RGYParamCommon() :
     tcfileIn(),
     timebase({ 0, 0 }),
     hevcbsf(RGYHEVCBsf::INTERNAL),
+    adaptResolution({ 0, 0 }),
     metric() {
 
 }

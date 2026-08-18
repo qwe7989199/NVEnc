@@ -48,7 +48,7 @@ Result of --check-features, a feature list returned from the driver. May depend 
 | Turing | [RTX2070](./GPUFeatures/rtx2070.txt), [RTX2060](./GPUFeatures/rtx2060.txt), [GTX1660Ti](./GPUFeatures/gtx1660ti.txt), [GTX1650 Super](./GPUFeatures/gtx1650super.txt)  | [Tesla T4](./GPUFeatures/teslaT4_linux.txt), [Tesla T4G @ aarch64](./GPUFeatures/teslaT4G_linux_arm.txt)  |
 | Ampere | [RTX3090](./GPUFeatures/rtx3090.txt), [RTX3080](./GPUFeatures/rtx3080.txt), [RTX3050Ti](./GPUFeatures/rtx3050ti.txt)  | |
 | Ada Lovelace | [RTX4090](./GPUFeatures/rtx4090.txt), [RTX4080](./GPUFeatures/rtx4080.txt) | |
-| Blackwell | [RTX5090](./GPUFeatures/rtx5090.txt) | |
+| Blackwell | [RTX5090](./GPUFeatures/rtx5090.txt), [RTX5070 Ti](./GPUFeatures/rtx5070ti.txt) | |
 
 ## Precautions for using NVEnc
 THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND.
@@ -90,7 +90,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND.
 
   | Category | Filters |
   |:--|:--|
-  | Deinterlace | deinterlace (CUVID), afs, bwdif, yadif, nnedi, rtgmc, kfm, decomb, stdeint |
+  | Deinterlace | deinterlace (CUVID), afs, bwdif, yadif, nnedi, rtgmc, kfm, decomb, onnx-deint |
   | Inverse Telecine / Decimation | rff, ivtc, decimate, mpdecimate, select-every |
   | Noise Reduction | knn, pmd, nlmeans, hqdn3d, smooth, denoise-dct, fft3d, msmooth, degrain, convolution3d, gauss, nvvfx-denoise, nvvfx-artifact-reduction |
   | Resize | resize (various algorithms, [npp](https://developer.nvidia.com/npp), [nvvfx](https://github.com/NVIDIA/MAXINE-VFX-SDK), [ngx-vsr](https://docs.nvidia.com/rtx/ngx/programming-guide/index.html), [libplacebo](https://code.videolan.org/videolan/libplacebo)), descale |
@@ -162,6 +162,7 @@ when there are multiple GPUs available which support NVENC.
 | NVEnc 7.26 or later | 9.0 - 12.1       | NVIDIA graphics driver 418.81 or later (x64) <br> NVIDIA graphics driver 456.81 or later (x86) |
 | NVEnc 7.49 or later | 9.0 - 12.2       | NVIDIA graphics driver 418.81 or later (x64) <br> NVIDIA graphics driver 456.81 or later (x86) |
 | NVEnc 8.00 or later | 10.0 - 13.0      | NVIDIA graphics driver 452.39 or later |
+| NVEnc 9.31 or later | 10.0 - 13.1      | NVIDIA graphics driver 452.39 or later |
 
 | Supported NVENC API | Required graphics driver version |
 |:-------------- |:--------------------------------- |
@@ -174,6 +175,7 @@ when there are multiple GPUs available which support NVENC.
 | 12.1 | NVIDIA graphics driver (Win 531.61 / Linux 530.41.03) or later |
 | 12.2 | NVIDIA graphics driver (Win 551.76 / Linux 550.54.144) or later |
 | 13.0 | NVIDIA graphics driver (Win 570.00 / Linux 570.00) or later |
+| 13.1 | NVIDIA graphics driver (Win 610.00 / Linux 610.00) or later |
 
 | CUDA version | Required graphics driver version |
 |:------ |:--------------------------------- |

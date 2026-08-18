@@ -171,6 +171,7 @@ const guid_desc h265_profile_names[] = {
 const CX_DESC h265_tier_names[] = {
     { _T("main"),  NV_ENC_TIER_HEVC_MAIN },
     { _T("high"),  NV_ENC_TIER_HEVC_HIGH },
+    { NULL, 0 }
 };
 
 enum {
@@ -197,6 +198,7 @@ static const std::vector<guid_desc> get_codec_profile_list(const RGY_CODEC codec
 const CX_DESC av1_tier_names[] = {
     { _T("0"),  NV_ENC_TIER_AV1_0 },
     { _T("1"),  NV_ENC_TIER_AV1_1 },
+    { NULL, 0 }
 };
 
 enum {
@@ -491,6 +493,7 @@ const CX_DESC list_bref_mode[] = {
     { _T("disabled"), NV_ENC_BFRAME_REF_MODE_DISABLED },
     { _T("each"),     NV_ENC_BFRAME_REF_MODE_EACH },
     { _T("middle"),   NV_ENC_BFRAME_REF_MODE_MIDDLE },
+    { _T("hierarchical"), NV_ENC_BFRAME_REF_MODE_HIERARCHICAL },
     { NULL, 0 }
 };
 
@@ -750,6 +753,10 @@ const CX_DESC list_nvenc_caps_bref_mode[] = {
     { _T("each"),               1 },
     { _T("only middle"),        2 },
     { _T("each + only middle"), 3 },
+    { _T("hierarchical"),       NV_ENC_BFRAME_REF_MODE_HIERARCHICAL },
+    { _T("each + hierarchical"), NV_ENC_BFRAME_REF_MODE_EACH | NV_ENC_BFRAME_REF_MODE_HIERARCHICAL },
+    { _T("only middle + hierarchical"), NV_ENC_BFRAME_REF_MODE_MIDDLE | NV_ENC_BFRAME_REF_MODE_HIERARCHICAL },
+    { _T("each + only middle + hierarchical"), NV_ENC_BFRAME_REF_MODE_EACH | NV_ENC_BFRAME_REF_MODE_MIDDLE | NV_ENC_BFRAME_REF_MODE_HIERARCHICAL },
     { NULL, 0 }
 };
 

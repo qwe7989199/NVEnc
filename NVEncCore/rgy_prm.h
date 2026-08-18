@@ -38,6 +38,11 @@
 #include <array>
 #include <optional>
 
+// ENABLE_NVVFXはNVEncでのみ定義されるため、他エンコーダでも条件式として使えるようにしておく
+#ifndef ENABLE_NVVFX
+#define ENABLE_NVVFX 0
+#endif
+
 static const int BITSTREAM_BUFFER_SIZE =  4 * 1024 * 1024;
 static const int OUTPUT_BUF_SIZE       = 16 * 1024 * 1024;
 
@@ -84,7 +89,7 @@ static const int RGY_AUDIO_QUALITY_DEFAULT = 0;
 #define ENABLE_VPP_FILTER_ANIME4K      (ENCODER_QSV   || ENCODER_NVENC || ENCODER_VCEENC || ENCODER_MPP)
 #define ENABLE_VPP_FILTER_ONNX         ((ENABLE_OPENVINO && ENCODER_QSV) || (ENABLE_ONNXRUNTIME && (ENCODER_NVENC || ENCODER_VCEENC)))
 #define ENABLE_VPP_FILTER_RIFE_OV      ((ENABLE_OPENVINO && ENCODER_QSV) || (ENABLE_ONNXRUNTIME && (ENCODER_NVENC || ENCODER_VCEENC)))
-#define ENABLE_VPP_FILTER_STDEINT      (0) // DISABLED
+#define ENABLE_VPP_FILTER_ONNX_DEINT   ((ENABLE_OPENVINO && ENCODER_QSV) || (ENABLE_ONNXRUNTIME && ENCODER_NVENC))
 #define ENABLE_VPP_FILTER_DENOISE_DCT  (ENCODER_QSV   || ENCODER_NVENC || ENCODER_VCEENC || ENCODER_MPP || CLFILTERS_AUF)
 #define ENABLE_VPP_FILTER_SMOOTH       (ENCODER_QSV   || ENCODER_NVENC || ENCODER_VCEENC || ENCODER_MPP || CLFILTERS_AUF)
 #define ENABLE_VPP_FILTER_FFT3D        (ENCODER_QSV   || ENCODER_NVENC || ENCODER_VCEENC || ENCODER_MPP)
@@ -185,7 +190,7 @@ enum class VppType : int {
     CL_KFM,
     CL_YADIF,
     CL_DECOMB,
-    CL_STDEINT,
+    CL_ONNX_DEINT,
     CL_IVTC,
     CL_DECIMATE,
     CL_MPDECIMATE,
@@ -547,6 +552,8 @@ static const int   FILTER_DEFAULT_DEGRAIN_SEARCH_EARLY_SAD = -1;
 static const int   FILTER_MIN_DEGRAIN_SEARCH_EARLY_SAD = -1;
 static const int   FILTER_MAX_DEGRAIN_SEARCH_EARLY_SAD = 65535;
 static const int   FILTER_DEFAULT_KFM_SEARCH_EARLY_SAD_OVERRIDE = -2;
+static const int   FILTER_DEFAULT_DEGRAIN_SPATIAL_EARLY_SAD = -1;
+static const int   FILTER_DEFAULT_KFM_SPATIAL_EARLY_SAD_OVERRIDE = -2;
 static const bool  FILTER_DEFAULT_DEGRAIN_TRUEMOTION = false;
 static const int   FILTER_DEFAULT_DEGRAIN_LAMBDA = 400;
 static const int   FILTER_DEFAULT_DEGRAIN_LSAD = 400;
@@ -1529,6 +1536,7 @@ struct VppLibplaceboDeband {
 };
 
 enum class VppLibplaceboColorsystem {
+    // libplaceboの列挙値はAPIで変わるため、この並びを同期させず変換関数を通す。
     UNKNOWN,
     BT_601,
     BT_709,
@@ -1541,6 +1549,8 @@ enum class VppLibplaceboColorsystem {
     YCGCO,
     RGB,
     XYZ,
+    YCGCO_RE,
+    YCGCO_RO,
     COUNT
 };
 
@@ -1570,6 +1580,8 @@ const CX_DESC list_vpp_libplacebo_colorsystem[] = {
     { _T("ycgco"),       (int)VppLibplaceboColorsystem::YCGCO },
     { _T("rgb"),         (int)VppLibplaceboColorsystem::RGB },
     { _T("xyz"),         (int)VppLibplaceboColorsystem::XYZ },
+    { _T("ycgco-re"),    (int)VppLibplaceboColorsystem::YCGCO_RE },
+    { _T("ycgco-ro"),    (int)VppLibplaceboColorsystem::YCGCO_RO },
     { NULL, 0 }
 };
 
@@ -2908,6 +2920,7 @@ struct VppDegrain {
     int searchParam;
     int pelSearch;
     int searchEarlySad;
+    int spatialEarlySad;
     bool trueMotion;
     int lambda;
     int lsad;
@@ -3018,6 +3031,7 @@ struct VppKfm {
     VppKfmDebugStage debugStage;
     tstring timecode;
     int searchEarlySadOverride;
+    int spatialEarlySadOverride;
 
     VppKfm();
     bool operator==(const VppKfm& x) const;
@@ -3572,26 +3586,32 @@ struct VppRifeOV {
     tstring print() const;
 };
 
-enum class VppStDeintMode {
+enum class VppOnnxDeintMode {
     Bob,
     Normal,
 };
 
-extern const CX_DESC list_vpp_stdeint_mode[];
+// モデルごとのフィールドの与え方。チャンネル数からは判別できない
+// (DDDとDeFはどちらも9ch入力/3ch出力だが、DDDは転置したフィールド、DeFは行補間した
+//  フレームを受け取る)ため、明示的に指定する。
+enum class VppOnnxDeintArchitecture {
+    StDeint,
+    DDD,
+};
 
-struct VppStDeint {
+extern const CX_DESC list_vpp_onnx_deint_mode[];
+struct VppOnnxDeint {
     bool    enable;
     tstring modelFile;
     tstring device;
-    tstring provider;
     tstring precision;
-    VppStDeintMode mode;
+    VppOnnxDeintMode mode;
     CspMatrix colormatrix;
     CspColorRange colorrange;
 
-    VppStDeint();
-    bool operator==(const VppStDeint& x) const;
-    bool operator!=(const VppStDeint& x) const;
+    VppOnnxDeint();
+    bool operator==(const VppOnnxDeint& x) const;
+    bool operator!=(const VppOnnxDeint& x) const;
     tstring print() const;
 };
 
@@ -3909,7 +3929,7 @@ struct RGYParamVpp {
     VppKfm kfm;
     VppYadif yadif;
     VppDecomb decomb;
-    VppStDeint stdeint;
+    VppOnnxDeint onnxDeint;
     VppIvtc ivtc;
     VppRff rff;
     VppSelectEvery selectevery;
@@ -3984,6 +4004,7 @@ static const TCHAR *RGY_METADATA_COPY = _T("copy");
 
 static const int TRACK_SELECT_BY_LANG  = -1;
 static const int TRACK_SELECT_BY_CODEC = -2;
+static const int TRACK_SELECT_BY_LANG_EXCLUDE = -3;
 
 struct AudioBitrate {
     std::string channel;
@@ -4004,6 +4025,7 @@ struct AudioSelect {
                               // 0 ... 全指定
                               // TRACK_SELECT_BY_LANG  ... langによる選択
                               // TRACK_SELECT_BY_CODEC ... selectCodecによる選択
+                              // TRACK_SELECT_BY_LANG_EXCLUDE ... langによる除外
     tstring  decCodecPrm;     //音声エンコードのデコーダのパラメータ
     tstring  encCodec;        //音声エンコードのコーデック
     tstring  encCodecPrm;     //音声エンコードのコーデックのパラメータ
@@ -4043,6 +4065,7 @@ struct SubtitleSelect {
                          //  0 ... 全指定
                          //  TRACK_SELECT_BY_LANG ... langによる選択
                          //  TRACK_SELECT_BY_CODEC ... selectCodecによる選択
+                         //  TRACK_SELECT_BY_LANG_EXCLUDE ... langによる除外
     tstring encCodec;
     tstring encCodecPrm;
     tstring decCodecPrm;
@@ -4243,6 +4266,7 @@ struct RGYParamCommon {
     tstring tcfileIn;
     rgy_rational<int> timebase;
     RGYHEVCBsf hevcbsf;
+    std::pair<int, int> adaptResolution;
 
     RGYVideoQualityMetric metric;
 

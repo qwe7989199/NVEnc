@@ -497,8 +497,15 @@ void RGYOutputAvcodec::CloseVideo(AVMuxVideo *muxVideo) {
 
 void RGYOutputAvcodec::CloseFormat(AVMuxFormat *muxFormat) {
     if (muxFormat->formatCtx) {
-        if (!muxFormat->streamError && m_Mux.format.fileHeaderWritten) {
-            av_write_trailer(muxFormat->formatCtx);
+        if (m_Mux.format.fileHeaderWritten) {
+            //trailerを書かないとmp4のmoovが作られず、それまでに書き出した分すら再生できないファイルになってしまう。
+            //そのため、途中でエラーになった場合でもtrailerの書き込みは必ず試みて、部分的にでも再生できる状態で残す
+            const auto ret = av_write_trailer(muxFormat->formatCtx);
+            if (ret < 0) {
+                AddMessage(RGY_LOG_WARN, _T("failed to write trailer: %s.\n"), qsv_av_err2str(ret).c_str());
+            } else if (muxFormat->streamError) {
+                AddMessage(RGY_LOG_WARN, _T("output file was finalized, but it is incomplete due to the error above.\n"));
+            }
         }
 #if USE_CUSTOM_IO
         if (!muxFormat->fpOutput) {
@@ -1824,8 +1831,8 @@ RGY_ERR RGYOutputAvcodec::InitAudio(AVMuxAudio *muxAudio, AVOutputStreamPrm *inp
         }
         int enc_sample_rate = (inputAudio->samplingRate) ? inputAudio->samplingRate : muxAudio->outCodecDecodeCtx->sample_rate;
         //select samplefmt
-        muxAudio->outCodecEncodeCtx->sample_fmt          = AutoSelectSampleFmt(muxAudio->outCodecEncode->sample_fmts, muxAudio->outCodecDecodeCtx);
-        muxAudio->outCodecEncodeCtx->sample_rate         = AutoSelectSamplingRate(muxAudio->outCodecEncode->supported_samplerates, enc_sample_rate);
+        muxAudio->outCodecEncodeCtx->sample_fmt          = AutoSelectSampleFmt(rgy_avcodec_get_sample_fmts(muxAudio->outCodecEncode), muxAudio->outCodecDecodeCtx);
+        muxAudio->outCodecEncodeCtx->sample_rate         = AutoSelectSamplingRate(rgy_avcodec_get_supported_samplerates(muxAudio->outCodecEncode), enc_sample_rate);
 #if AV_CHANNEL_LAYOUT_STRUCT_AVAIL
         muxAudio->outCodecEncodeCtx->ch_layout           = (*enc_channel_layout.get());
 #else
@@ -2006,8 +2013,6 @@ RGY_ERR RGYOutputAvcodec::InitAudio(AVMuxAudio *muxAudio, AVOutputStreamPrm *inp
             }
         }
         muxAudio->streamOut->codecpar->codec_tag = codectag;
-
-        avformat_transfer_internal_stream_timing_info(m_Mux.format.formatCtx->oformat, muxAudio->streamOut, inputAudio->src.stream, AVFMT_TBCF_AUTO);
 
         if (muxAudio->streamOut->codecpar->codec_id == AV_CODEC_ID_MP3) {
             if (   muxAudio->streamOut->codecpar->block_align == 1
@@ -3438,7 +3443,8 @@ RGY_ERR RGYOutputAvcodec::WriteNextFrameInternal(RGYBitstream *bitstream, int64_
         RGYTimestampMapVal bs_framedata = m_Mux.video.timestamp->getByEncodeFrameID(m_Mux.video.prevEncodeFrameId + 1);
         if (bs_framedata.inputFrameId < 0) {
             bs_framedata.inputFrameId = m_Mux.video.prevInputFrameId;
-            AddMessage(RGY_LOG_WARN, _T("Failed to get timestamp for id %lld, using %lld.\n"), bitstream->pts(), bs_framedata.inputFrameId);
+            AddMessage(RGY_LOG_WARN, _T("Failed to get timestamp for encode frame id %lld, using input frame id %lld.\n"),
+                m_Mux.video.prevEncodeFrameId + 1, bs_framedata.inputFrameId);
         } else {
             m_Mux.video.prevInputFrameId = bs_framedata.inputFrameId;
             m_Mux.video.prevEncodeFrameId++;
@@ -4275,7 +4281,9 @@ RGY_ERR RGYOutputAvcodec::WriteOtherPacket(AVPacket *pkt) {
         //以前のptsより前になりそうになったら修正する
         const auto maxPts = pMuxOther->lastPtsOut + ((m_Mux.format.formatCtx->oformat->flags & AVFMT_TS_NONSTRICT) ? 0 : 1);
         if (pkt->pts < maxPts) {
-            auto loglevel = (maxPts - pkt->pts > 2 && pMuxOther->streamOut->codecpar->codec_type != AVMEDIA_TYPE_SUBTITLE /*字幕の場合は頻繁に発生することがある*/) ? RGY_LOG_WARN : RGY_LOG_DEBUG;
+            const auto loglevel = (pMuxOther->streamOut->codecpar->codec_type == AVMEDIA_TYPE_SUBTITLE)
+                ? RGY_LOG_TRACE // 字幕の場合は頻繁に発生することがある
+                : ((maxPts - pkt->pts > 2) ? RGY_LOG_WARN : RGY_LOG_DEBUG);
             if (loglevel >= m_printMes->getLogLevel(RGY_LOGT_OUT)) {
                 AddMessage(loglevel, _T("Timestamp error in stream %d, previous: %lld, current: %lld [timebase: %d/%d].\n"),
                     pMuxOther->streamOut->index,

@@ -214,6 +214,65 @@ NVIDIA グラフィックドライバ 551.23
 今後の更新で設定ファイルの互換性がなくなるかもしれません。
 
 【メモ】
+2026.08.15 (9.32)
+- 使用するffmpegのライブラリを更新。
+  - ffmpeg 8.0 -> 9.0.1
+  - libvmaf 3.0.0 -> 3.2.0
+  - libpng 1.6.50 -> 1.6.58
+  - xz 5.8.2 -> 5.8.3
+  - expat 2.7.1 -> 2.8.2
+  - harfbuzz 11.4.4 -> 14.3.0
+  - libunibreak 6.1 -> 7.0
+  - libass 0.17.4 -> 0.17.5
+  - lame 3.100 -> 4.0
+  - libxml2 2.14.5 -> 2.15.3
+  - libbluray 1.3.4 -> 1.5.0
+  - libaribcaption 1.1.1 -> 1.1.2
+  - libav1d 1.5.3 -> 1.5.4
+  - libvpl 2.16.0 -> 2.17.0
+  - nv-codec-headers 12.2.72.0 -> 13.1.15.0
+  - glslang 15.4.0 -> 16.5.0
+  - shaderc 2024.1 -> 2026.3
+  - dovi_tool 2.3.1 -> 2.3.3
+  - libjpeg-turbo 3.1.1 -> 3.2.0
+  - lcms2 2.17 -> 2.19.1
+  - vulkan-loader 1.3.295 -> 1.4.359
+  - libplacebo 7.351.0 -> 7.360.1
+  - vvenc 1.13.1 -> 1.14.0
+  - svt-av1 3.1.0 -> 4.2.0
+  - dovi_tool 2.3.1 -> 2.3.3
+  - hdr10plus_tool 1.7.1 -> 1.7.2
+- --vpp-onnxのゼロコピー失敗後のホスト経路を再初期化。
+- --vpp-anime4k-shaderのdeblurのstrength指定順を修正。
+- LUT3Dの入力ドメイン処理を修正。(--vpp-colorspace)
+- --vpp-tweakの彩度係数の二重適用を修正。
+
+2026.08.08 (9.31)
+- NVENC SDK 13.1に対応。
+- AV1 hierarchical Bフレーム参照モードに対応。(--bref-mode hierarchical)
+- 入力途中の解像度変更に対応。
+- 可変解像度の最大入力解像度指定を追加。(--adapt-resolution)
+- PMT変更追従機能を追加。
+- ONNXデインターレースフィルタを追加。(--vpp-onnx-deint)
+- 音声・字幕の言語除外指定に対応。
+- --vpp-kfmのmode=24で長尺処理時にGPUメモリが増え続ける問題を修正。
+- --vpp-kfmとNVENC入力のメモリ保持を改善。
+- エラー発生時もmp4のtrailerを書き込むように。
+
+2026.08.04 (9.30)
+- AviUtl2 2.1.3で音声が出力されないことがある問題を修正。
+
+2026.08.03 (9.29)
+- GPU IDをCUDAの列挙順に統一。 ( #789 )
+
+2026.08.01 (9.28)
+- --vpp-kfm/--vpp-degrainを高速化。
+- --vpp-onnxの登録モデルでフレーム数指定に対応。
+- --vpp-onnxをゼロコピー化して高速化。
+- --vpp-rife-ovのCUDA経路をゼロコピー化して高速化。
+- libvmafのCUDA実装を修正し、不正アクセス例外を修正。
+- Linux配布用CUDAを11.8へ更新。
+
 2026.07.27 (9.27)
 - AviUtl2でプロジェクト単位の出力設定の保存・復元に対応。
 - --vpp-kfm/--vpp-rtgmc/--vpp-degrainの動き探索にSAD閾値による打ち切りを追加して高速化。

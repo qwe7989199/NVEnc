@@ -315,7 +315,7 @@
     <ClCompile Include="NVEncFilterRifeOV.cpp">
       <Filter>ソース ファイル</Filter>
     </ClCompile>
-    <ClCompile Include="NVEncFilterStDeint.cpp">
+    <ClCompile Include="NVEncFilterOnnxDeint.cpp">
       <Filter>ソース ファイル</Filter>
     </ClCompile>
     <ClCompile Include="rgy_model_registry.cpp">
@@ -343,6 +343,9 @@
       <Filter>ソース ファイル</Filter>
     </ClCompile>
     <ClCompile Include="NVEncFilterLibplacebo.cpp">
+      <Filter>ソース ファイル</Filter>
+    </ClCompile>
+    <ClCompile Include="rgy_libass.cpp">
       <Filter>ソース ファイル</Filter>
     </ClCompile>
     <ClCompile Include="rgy_libplacebo.cpp">
@@ -832,7 +835,7 @@
     <ClInclude Include="NVEncFilterRifeOV.h">
       <Filter>ヘッダー ファイル</Filter>
     </ClInclude>
-    <ClInclude Include="NVEncFilterStDeint.h">
+    <ClInclude Include="NVEncFilterOnnxDeint.h">
       <Filter>ヘッダー ファイル</Filter>
     </ClInclude>
     <ClInclude Include="rgy_model_registry.h">
@@ -851,6 +854,9 @@
       <Filter>ヘッダー ファイル</Filter>
     </ClInclude>
     <ClInclude Include="NVEncFilterLibplacebo.h">
+      <Filter>ヘッダー ファイル</Filter>
+    </ClInclude>
+    <ClInclude Include="rgy_libass.h">
       <Filter>ヘッダー ファイル</Filter>
     </ClInclude>
     <ClInclude Include="rgy_libplacebo.h">
@@ -1005,7 +1011,10 @@
     <CudaCompile Include="NVEncFilterBwdif.cu">
       <Filter>ソース ファイル</Filter>
     </CudaCompile>
-    <CudaCompile Include="NVEncFilterStDeint.cu">
+    <CudaCompile Include="NVEncFilterOnnxDeint.cu">
+      <Filter>ソース ファイル</Filter>
+    </CudaCompile>
+    <CudaCompile Include="NVEncFilterOnnx.cu">
       <Filter>ソース ファイル</Filter>
     </CudaCompile>
     <CudaCompile Include="NVEncFilterIvtc.cu">

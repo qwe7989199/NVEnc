@@ -658,6 +658,9 @@ RGY_ERR initReaders(
         inputInfoAVCuvid.audioReadOffsetSec = (ctrl->lowLatency) ? ((output_is_pipe(common)) ? 0.0 : 2.0) : 0.0;
         inputInfoAVCuvid.timestampPassThrough = common->timestampPassThrough;
         inputInfoAVCuvid.hevcbsf = common->hevcbsf;
+        // reader側の解像度変更ガードと、pipeline側の入力サーフェス確保上限は必ず同じ値にする。
+        // この伝達を忘れると、サーフェスは拡大済みでもreaderが従来の初期解像度を上限として拒否する。
+        inputInfoAVCuvid.adaptResolution = common->adaptResolution;
     };
 #if ENCODER_NVENC
     std::unique_ptr<RGYInputCuprPrm> inputPrmCupr;

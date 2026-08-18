@@ -124,6 +124,7 @@ message('GPU code generation targets: ' + ' '.join(gpu_code_gen))
 enable_vapoursynth = get_option('enable_vapoursynth')
 enable_avisynth = get_option('enable_avisynth')
 enable_libass = get_option('enable_libass')
+libass_static = get_option('libass_static')
 enable_libplacebo_option = get_option('enable_libplacebo')
 libplacebo_static = get_option('libplacebo_static')
 enable_vmaf_option = get_option('enable_vmaf')
@@ -351,9 +352,17 @@ int main(void) { return 0; }
 endif
 
 if enable_libass
-  libass_dep = dependency('libass', required: true)
+  libass_dep = dependency('libass', required: true, static: libass_static)
+  libass_compile_dep = libass_dep.partial_dependency(includes: true, compile_args: true)
+  if libass_static
+    libass_link_dep = libass_dep
+  else
+    libass_link_dep = disabler()
+  endif
 else
   libass_dep = disabler()
+  libass_compile_dep = disabler()
+  libass_link_dep = disabler()
 endif
 have_vmaf_headers = false
 vmaf_headers_from_default = false
@@ -804,6 +813,7 @@ conf_data.set10('ENABLE_VAPOURSYNTH_READER', enable_vapoursynth and have_vapours
 conf_data.set10('ENABLE_AVSW_READER', true)
 conf_data.set10('ENABLE_SM_READER', false)
 conf_data.set10('ENABLE_LIBASS_SUBBURN', libass_dep.found())
+conf_data.set10('LIBASS_STATIC_LINK', libass_dep.found() and libass_static)
 conf_data.set10('ENABLE_VMAF', have_vmaf_headers)
 conf_data.set10('ENABLE_LIBVSHIP', have_libvship_headers)
 conf_data.set10('ENABLE_AVCODEC_OUT_THREAD', true)
@@ -840,7 +850,6 @@ endif
 
 rev_data = configuration_data()
 rev_data.set_quoted('ENCODER_REV', rev_count)
-rev_data.set('ENABLE_METRIC_FRAMEWORK', 0)
 configure_file(
   output: 'rgy_rev.h',
   configuration: rev_data,
@@ -920,7 +929,7 @@ nvenccore_sources = files(
   'NVEncCore/NVEncFilterNvvfx.cpp',
   'NVEncCore/NVEncFilterOnnx.cpp',
   'NVEncCore/NVEncFilterRifeOV.cpp',
-  'NVEncCore/NVEncFilterStDeint.cpp',
+  'NVEncCore/NVEncFilterOnnxDeint.cpp',
   'NVEncCore/NVEncFilterRtgmcShimmerRepair.cpp',
   'NVEncCore/NVEncFilterOverlay.cpp',
   'NVEncCore/NVEncFilterPad.cpp',
@@ -977,6 +986,7 @@ nvenccore_sources = files(
   'NVEncCore/rgy_level_av1.cpp',
   'NVEncCore/rgy_level_h264.cpp',
   'NVEncCore/rgy_level_hevc.cpp',
+  'NVEncCore/rgy_libass.cpp',
   'NVEncCore/rgy_libplacebo.cpp',
   'NVEncCore/rgy_libvmaf.cpp',
   'NVEncCore/rgy_libvship.cpp',
@@ -1026,7 +1036,8 @@ cuda_sources = files(
   'NVEncCore/NVEncFilterAfsMerge.cu',
   'NVEncCore/NVEncFilterAfsSynthesize.cu',
   'NVEncCore/NVEncFilterBwdif.cu',
-  'NVEncCore/NVEncFilterStDeint.cu',
+  'NVEncCore/NVEncFilterOnnxDeint.cu',
+  'NVEncCore/NVEncFilterOnnx.cu',
   'NVEncCore/NVEncFilterIvtc.cu',
   'NVEncCore/NVEncFilterAnime4k.cu',
   'NVEncCore/NVEncFilterKfm.cu',
@@ -1202,8 +1213,11 @@ endif
 if avisynth_compile_dep.found()
   all_deps += avisynth_compile_dep
 endif
-if libass_dep.found()
-  all_deps += libass_dep
+if libass_compile_dep.found()
+  all_deps += libass_compile_dep
+endif
+if libass_link_dep.found()
+  all_deps += libass_link_dep
 endif
 if have_libplacebo_headers
   all_deps += libplacebo_compile_dep
@@ -1271,6 +1285,7 @@ summary({
   'VapourSynth': enable_vapoursynth and have_vapoursynth_headers,
   'AviSynth': enable_avisynth and have_avisynth_headers,
   'libass': libass_dep.found(),
+  'libass static': libass_dep.found() and libass_static,
   'libplacebo': have_libplacebo_headers,
   'libplacebo static': have_libplacebo_headers and libplacebo_static and have_libplacebo_link,
   'VMAF': have_vmaf_headers,
